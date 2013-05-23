@@ -1,0 +1,84 @@
+pg_rewind
+=========
+
+pg_rewind is a tool for synchronizing a PostgreSQL data directory with another
+PostgreSQL data directory that was forked from the first one. The result is
+equivalent to rsyncing the first data directory (referred to as the old cluster
+from now on) with the second one (the new cluster). The advantage of pg_rewind
+over rsync is that pg_rewind uses the WAL to determine changed data blocks,
+and does not require reading through all files in the cluster. That makes it
+a lot faster when the database is large and only a small portion of it differs
+between the clusters.
+
+Download
+--------
+
+The latest version of this software can be found on the project website at
+https://github.com/vmware/pg_rewind.
+
+Installation
+------------
+
+Compiling pg_rewind requires the PostgreSQL source tree to be available.
+There are two ways to do that:
+
+1. Put pg_rewind project directory inside PostgreSQL source tree as
+contrib/pg_rewind, and use "make" to compile
+
+or
+
+2. Pass the path to the PostgreSQL source tree to make, in the top_srcdir
+variable: "make USE_PGXS=1 top_srcdir=<path to PostgreSQL source tree>"
+
+In addition, you must have pg_config in $PATH.
+
+The current version of pg_rewind is compatible with PostgreSQL version 9.3.
+
+Usage
+-----
+
+    pg_rewind --target-pgdata=<path> --source-server=<new server's conn string>
+
+The contents of the old data directory will be overwritten with the new data,
+so that after pg_rewind finishes, the old data directory is equal to the new
+one.
+
+pg_rewind expects to find all the necessary WAL files in the pg_xlog
+directories of the clusters. This includes all the WAL on both clusters
+starting from the last common checkpoint preceding the fork. Fetching missing
+files from a WAL archive is currently not supported. However, you can copy any
+missing files manually from the WAL archive to the pg_xlog directory.
+
+
+Theory of operation
+-------------------
+
+The basic idea is to copy everything from the new cluster to old, except for
+the blocks that we know to be the same. 
+
+1. Scan the WAL log of the old cluster, starting from the point where the new
+cluster's timeline history forked off from the old cluster. For each WAL
+record, make a note of the data blocks that are touched. This yields a list of
+all the data blocks that were changed in the old cluster, after the new cluster
+forked off.
+
+2. Copy all those changed blocks from the new master to the old master.
+
+3. Copy all other files like clog, conf files etc. from the new cluster to old.
+Everything except the relation files.
+
+4. Apply the WAL from the new master, starting from the checkpoint created at
+failover. (pg_rewind doesn't actually apply the WAL, it just creates a backup
+label file indicating that when PostgreSQL is started, it will start replay
+from that checkpoint and apply all the required WAL)
+
+TODO
+----
+
+* tablespace support
+
+License
+-------
+
+pg_rewind can be distributed under the BSD-style PostgreSQL license. See
+COPYRIGHT file for more information.
