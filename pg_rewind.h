@@ -36,6 +36,7 @@ extern void extractPageMap(const char *datadir, XLogRecPtr startpoint, TimeLineI
 extern void findLastCheckpoint(const char *datadir, XLogRecPtr searchptr, TimeLineID tli,
 				   XLogRecPtr *lastchkptrec, TimeLineID *lastchkpttli,
 				   XLogRecPtr *lastchkptredo);
+extern XLogRecPtr readOneRecord(const char *datadir, XLogRecPtr ptr, TimeLineID tli);
 
 
 /* in timeline.c */

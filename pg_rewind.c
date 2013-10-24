@@ -33,7 +33,7 @@ static void createBackupLabel(XLogRecPtr startpoint, TimeLineID starttli,
 
 static void digestControlFile(ControlFileData *ControlFile, char *source, size_t size);
 static void sanityChecks(void);
-static void calculateLastCommonXLogRecPtr(XLogRecPtr *recptr, TimeLineID *tli);
+static void findCommonAncestorTimeline(XLogRecPtr *recptr, TimeLineID *tli);
 
 static ControlFileData ControlFile_target;
 static ControlFileData ControlFile_source;
@@ -83,13 +83,14 @@ main(int argc, char **argv)
 	};
 	int			option_index;
 	int			c;
-	XLogRecPtr	lastcommonrec;
+	XLogRecPtr	divergerec;
 	TimeLineID	lastcommontli;
 	XLogRecPtr	chkptrec;
 	TimeLineID	chkpttli;
 	XLogRecPtr	chkptredo;
 	size_t		size;
 	char	   *buffer;
+	bool		rewind_needed;
 
 	progname = get_progname(argv[0]);
 
@@ -194,12 +195,46 @@ main(int argc, char **argv)
 		exit(1);
 	}
 
-	calculateLastCommonXLogRecPtr(&lastcommonrec, &lastcommontli);
-	printf("Last common WAL position: %X/%X on timeline %u\n",
-		   (uint32) (lastcommonrec >> 32), (uint32) lastcommonrec,
-		   lastcommontli);
+	findCommonAncestorTimeline(&divergerec, &lastcommontli);
+	printf("The servers diverged at WAL position %X/%X on timeline %u.\n",
+		   (uint32) (divergerec >> 32), (uint32) divergerec, lastcommontli);
 
-	findLastCheckpoint(datadir_target, lastcommonrec, lastcommontli,
+	/*
+	 * Check for the possibility that the target is in fact a direct ancestor
+	 * of the source. In that case, there is no divergent history in the
+	 * target that needs rewinding.
+	 */
+	if (ControlFile_target.checkPoint >= divergerec)
+	{
+		rewind_needed = true;
+	}
+	else
+	{
+		XLogRecPtr chkptendrec;
+
+		/* Read the checkpoint record on the target to see where it ends. */
+		chkptendrec = readOneRecord(datadir_target,
+									ControlFile_target.checkPoint,
+									ControlFile_target.checkPointCopy.ThisTimeLineID);
+
+		/*
+		 * If the histories diverged exactly at the end of the shutdown
+		 * checkpoint record on the target, there are no WAL records in the
+		 * target that don't belong in the source's history, and no rewind is
+		 * needed.
+		 */
+		if (chkptendrec == divergerec)
+			rewind_needed = false;
+		else
+			rewind_needed = true;
+	}
+
+	if (!rewind_needed)
+	{
+		printf("No rewind required.\n");
+		exit(0);
+	}
+	findLastCheckpoint(datadir_target, divergerec, lastcommontli,
 					   &chkptrec, &chkpttli, &chkptredo);
 	printf("Last common checkpoint at %X/%X on timeline %u\n",
 		   (uint32) (chkptrec >> 32), (uint32) chkptrec,
@@ -213,7 +248,7 @@ main(int argc, char **argv)
 	 * Read the target WAL, extracting all the pages that were modified on the
 	 * target cluster after the fork.
 	 */
-	extractPageMap(datadir_target, lastcommonrec, lastcommontli);
+	extractPageMap(datadir_target, divergerec, lastcommontli);
 
 	/* XXX: this is probably too verbose even in verbose mode */
 	if (verbose)
@@ -271,14 +306,16 @@ sanityChecks(void)
 }
 
 /*
- * Determines the location of the last common WAL record in the timeline
- * histories of the two clusters. We need to
+ * Determine the TLI of the last common timeline in the histories of the two
+ * clusters. *tli is set to the last common timeline, and *recptr is set to
+ * the position where the histories diverged (ie. the first WAL record that's
+ * not the same in both clusters).
  *
  * Control files of both clusters must be read into ControlFile_target/source
  * before calling this.
  */
 static void
-calculateLastCommonXLogRecPtr(XLogRecPtr *recptr, TimeLineID *tli)
+findCommonAncestorTimeline(XLogRecPtr *recptr, TimeLineID *tli)
 {
 	TimeLineID	targettli;
 	TimeLineHistoryEntry *sourceHistory;

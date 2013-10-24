@@ -97,6 +97,42 @@ extractPageMap(const char *datadir, XLogRecPtr startpoint, TimeLineID tli)
 }
 
 /*
+ * Reads one WAL record. Returns the end position of the record, without
+ * doing anything the record itself.
+ */
+XLogRecPtr
+readOneRecord(const char *datadir, XLogRecPtr ptr, TimeLineID tli)
+{
+	XLogRecord *record;
+	XLogReaderState *xlogreader;
+	char	   *errormsg;
+	XLogPageReadPrivate private;
+	XLogRecPtr	endptr;
+
+	private.datadir = datadir;
+	private.tli = tli;
+	xlogreader = XLogReaderAllocate(&SimpleXLogPageRead, &private);
+
+	record = XLogReadRecord(xlogreader, ptr, &errormsg);
+	if (record == NULL)
+	{
+		fprintf(stderr, "could not read WAL record at %X/%X: %s\n",
+				(uint32) (ptr >> 32), (uint32) (ptr), errormsg);
+		exit(1);
+	}
+	endptr = xlogreader->EndRecPtr;
+
+	XLogReaderFree(xlogreader);
+	if (xlogreadfd != -1)
+	{
+		close(xlogreadfd);
+		xlogreadfd = -1;
+	}
+
+	return endptr;
+}
+
+/*
  * Find the previous checkpoint preceding given WAL position.
  */
 void
