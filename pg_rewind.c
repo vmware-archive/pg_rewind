@@ -246,9 +246,17 @@ main(int argc, char **argv)
 
 	/*
 	 * Read the target WAL, extracting all the pages that were modified on the
-	 * target cluster after the fork.
+	 * target cluster since the last common checkpoint.
+	 *
+	 * We only really need to find the pages that were modified after the
+	 * point the servers diverge. However, when a hint bit is updated, a
+	 * WAL record is only created the first time that happens on a page after
+	 * a checkpoint. So we have to scan from the previous checkpoint, to
+	 * catch all the hint bit updates. We could ignore all other record types
+	 * but hint-bit induced full page images until the point of divergence,
+	 * but it doesn't seem worth the trouble to differentiate.
 	 */
-	extractPageMap(datadir_target, divergerec, lastcommontli);
+	extractPageMap(datadir_target, chkptrec, lastcommontli);
 
 	/* XXX: this is probably too verbose even in verbose mode */
 	if (verbose)
