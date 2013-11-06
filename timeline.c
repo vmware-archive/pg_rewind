@@ -58,7 +58,7 @@ rewind_parseTimeLineHistory(char *buffer, TimeLineID targetTLI, int *nentries)
 		if (!(*bufptr))
 			lastline = true;
 		else
-			*bufptr = '\0';
+			*bufptr++ = '\0';
 
 		/* skip leading whitespace and check for # comment */
 		for (ptr = fline; *ptr; ptr++)
