@@ -17,6 +17,7 @@ TESTDIR=.
 set -e
 
 # Set up master
+rm -rf $TESTDIR/data-master
 initdb -D $TESTDIR/data-master
 echo "wal_level=hot_standby" >> $TESTDIR/data-master/postgresql.conf
 echo "max_wal_senders=2" >> $TESTDIR/data-master/postgresql.conf
@@ -41,6 +42,7 @@ psql -c "insert into tbl1 values ('in master'); " postgres
 psql -c "checkpoint; " postgres
 
 # Set up standby
+rm -rf $TESTDIR/data-standby
 pg_basebackup -D $TESTDIR/data-standby -x
 
 sed -i "s/log_line_prefix=.*/log_line_prefix='S %m %p '/g" $TESTDIR/data-standby/postgresql.conf
