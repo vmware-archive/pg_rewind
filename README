@@ -37,9 +37,10 @@ The current version of pg_rewind is compatible with PostgreSQL version 9.3.
 Usage
 -----
 
-    pg_rewind --target-pgdata=<path> --source-server=<new server's conn string>
+    pg_rewind --target-pgdata=<path> \
+        --source-server=<new server's conn string>
 
-The contents of the old data directory will be overwritten with the new data,
+The contents of the old data directory will be overwritten with the new data
 so that after pg_rewind finishes, the old data directory is equal to the new
 one.
 
@@ -53,21 +54,21 @@ missing files manually from the WAL archive to the pg_xlog directory.
 Theory of operation
 -------------------
 
-The basic idea is to copy everything from the new cluster to old, except for
-the blocks that we know to be the same. 
+The basic idea is to copy everything from the new cluster to the old cluster,
+except for the blocks that we know to be the same.
 
 1. Scan the WAL log of the old cluster, starting from the point where the new
 cluster's timeline history forked off from the old cluster. For each WAL
-record, make a note of the data blocks that are touched. This yields a list of
+record, make a note of the data blocks that were touched. This yields a list of
 all the data blocks that were changed in the old cluster, after the new cluster
 forked off.
 
-2. Copy all those changed blocks from the new master to the old master.
+2. Copy all those changed blocks from the new cluster to the old cluster.
 
-3. Copy all other files like clog, conf files etc. from the new cluster to old.
+3. Copy all other files like clog, conf files etc. from the new cluster to old cluster.
 Everything except the relation files.
 
-4. Apply the WAL from the new master, starting from the checkpoint created at
+4. Apply the WAL from the new cluster, starting from the checkpoint created at
 failover. (pg_rewind doesn't actually apply the WAL, it just creates a backup
 label file indicating that when PostgreSQL is started, it will start replay
 from that checkpoint and apply all the required WAL)
