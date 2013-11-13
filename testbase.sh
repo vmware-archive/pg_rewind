@@ -29,9 +29,9 @@ echo "autovacuum=off" >> $TESTDIR/data-master/postgresql.conf
 echo "max_connections=50" >> $TESTDIR/data-master/postgresql.conf
 
 # Accept replication connections
-echo "local   replication     heikki                                trust" >> $TESTDIR/data-master/pg_hba.conf
-echo "host   replication     heikki             127.0.01/32                   trust" >> $TESTDIR/data-master/pg_hba.conf
-echo "host   replication     heikki             ::1/128                   trust" >> $TESTDIR/data-master/pg_hba.conf
+echo "local replication all trust" >> $TESTDIR/data-master/pg_hba.conf
+echo "host replication all 127.0.01/32 trust" >> $TESTDIR/data-master/pg_hba.conf
+echo "host replication all ::1/128 trust" >> $TESTDIR/data-master/pg_hba.conf
 
 pg_ctl -w -D $TESTDIR/data-master start
 
