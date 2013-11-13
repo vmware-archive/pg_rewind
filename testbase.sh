@@ -17,6 +17,7 @@ TESTDIR=.
 set -e
 
 # Set up master
+rm -rf $TESTDIR/data-master
 initdb -D $TESTDIR/data-master
 echo "wal_level=hot_standby" >> $TESTDIR/data-master/postgresql.conf
 echo "max_wal_senders=2" >> $TESTDIR/data-master/postgresql.conf
@@ -29,9 +30,9 @@ echo "autovacuum=off" >> $TESTDIR/data-master/postgresql.conf
 echo "max_connections=50" >> $TESTDIR/data-master/postgresql.conf
 
 # Accept replication connections
-echo "local   replication     heikki                                trust" >> $TESTDIR/data-master/pg_hba.conf
-echo "host   replication     heikki             127.0.01/32                   trust" >> $TESTDIR/data-master/pg_hba.conf
-echo "host   replication     heikki             ::1/128                   trust" >> $TESTDIR/data-master/pg_hba.conf
+echo "local   replication    all                                trust" >> $TESTDIR/data-master/pg_hba.conf
+echo "host   replication     all             127.0.01/32                   trust" >> $TESTDIR/data-master/pg_hba.conf
+echo "host   replication     all             ::1/128                   trust" >> $TESTDIR/data-master/pg_hba.conf
 
 pg_ctl -w -D $TESTDIR/data-master start
 
@@ -41,6 +42,7 @@ psql -c "insert into tbl1 values ('in master'); " postgres
 psql -c "checkpoint; " postgres
 
 # Set up standby
+rm -rf $TESTDIR/data-standby
 pg_basebackup -D $TESTDIR/data-standby -x
 
 sed -i "s/log_line_prefix=.*/log_line_prefix='S %m %p '/g" $TESTDIR/data-standby/postgresql.conf
