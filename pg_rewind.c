@@ -245,10 +245,11 @@ main(int argc, char **argv)
 	traverse_datadir(datadir_target, &process_local_file);
 
 	/*
-	 * Read the target WAL, extracting all the pages that were modified on the
-	 * target cluster after the fork.
+	 * Read the target WAL from last checkpoint before the point of fork,
+	 * to extract all the pages that were modified on the target cluster
+	 * after the fork.
 	 */
-	extractPageMap(datadir_target, divergerec, lastcommontli);
+	extractPageMap(datadir_target, chkptrec, lastcommontli);
 
 	/* XXX: this is probably too verbose even in verbose mode */
 	if (verbose)
