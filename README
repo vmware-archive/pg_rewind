@@ -57,11 +57,11 @@ Theory of operation
 The basic idea is to copy everything from the new cluster to the old cluster,
 except for the blocks that we know to be the same.
 
-1. Scan the WAL log of the old cluster, starting from the point where the new
-cluster's timeline history forked off from the old cluster. For each WAL
-record, make a note of the data blocks that were touched. This yields a list of
-all the data blocks that were changed in the old cluster, after the new cluster
-forked off.
+1. Scan the WAL log of the old cluster, starting from the last checkpoint before
+the point where the new cluster's timeline history forked off from the old cluster.
+For each WAL record, make a note of the data blocks that were touched. This yields
+a list of all the data blocks that were changed in the old cluster, after the new
+cluster forked off.
 
 2. Copy all those changed blocks from the new cluster to the old cluster.
 
