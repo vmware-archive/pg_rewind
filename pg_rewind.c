@@ -236,7 +236,7 @@ main(int argc, char **argv)
 	}
 	findLastCheckpoint(datadir_target, divergerec, lastcommontli,
 					   &chkptrec, &chkpttli, &chkptredo);
-	printf("Last common checkpoint at %X/%X on timeline %u\n",
+	printf("Rewinding from last common checkpoint at %X/%X on timeline %u\n",
 		   (uint32) (chkptrec >> 32), (uint32) chkptrec,
 		   chkpttli);
 
