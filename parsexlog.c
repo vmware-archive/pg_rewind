@@ -142,6 +142,7 @@ findLastCheckpoint(const char *datadir, XLogRecPtr searchptr, TimeLineID tli,
 {
 	/* Walk backwards, starting from the given record */
 	XLogRecord *record;
+	XLogRecPtr forkptr = searchptr;
 	XLogReaderState *xlogreader;
 	char	   *errormsg;
 	XLogPageReadPrivate private;
@@ -166,7 +167,7 @@ findLastCheckpoint(const char *datadir, XLogRecPtr searchptr, TimeLineID tli,
 
 		/* Check if it is a checkpoint record */
 		info = record->xl_info & ~XLR_INFO_MASK;
-		if (record->xl_rmid == RM_XLOG_ID &&
+		if (record->xl_rmid == RM_XLOG_ID && searchptr < forkptr &&
 			(info == XLOG_CHECKPOINT_SHUTDOWN || info == XLOG_CHECKPOINT_ONLINE))
 		{
 			CheckPoint	checkPoint;
