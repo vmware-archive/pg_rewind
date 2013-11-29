@@ -383,7 +383,7 @@ print_filemap(void)
 }
 
 /*
- * Does it look like a relation data file? 
+ * Does it look like a relation data file?
  */
 static bool
 isRelDataFile(const char *path)

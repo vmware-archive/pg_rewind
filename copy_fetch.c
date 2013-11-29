@@ -419,7 +419,7 @@ slurpFile(const char *datadir, const char *path, size_t *filesize)
 				fullpath, strerror(errno));
 		exit(2);
 	}
-	
+
 	if (fstat(fd, &statbuf) < 0)
 	{
 		fprintf(stderr, _("could not open file \"%s\" for reading: %s\n"),

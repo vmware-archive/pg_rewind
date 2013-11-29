@@ -13,7 +13,7 @@
 
 #define FRONTEND 1
 #include "c.h"
-#undef FRONTEND 
+#undef FRONTEND
 #include "postgres.h"
 
 #include "pg_rewind.h"
@@ -315,10 +315,10 @@ extractPageInfo(XLogRecord *record)
 						samepage = ItemPointerGetBlockNumber(&xlrec->newtid) ==
 							ItemPointerGetBlockNumber(&xlrec->target.tid);
 
-						/* store page which contains updated tuple. */ 
+						/* store page which contains updated tuple. */
 						pageinfo_add(MAIN_FORKNUM, xlrec->target.node,
 									 ItemPointerGetBlockNumber(&xlrec->target.tid));
-						/* store another page if any. */ 
+						/* store another page if any. */
 						if (!samepage)
 							pageinfo_add(MAIN_FORKNUM, xlrec->target.node,
 										 ItemPointerGetBlockNumber(&xlrec->newtid));
@@ -338,7 +338,7 @@ extractPageInfo(XLogRecord *record)
 						xl_heap_lock *xlrec =
 							(xl_heap_lock *) XLogRecGetData(record);
 
-						pageinfo_add(MAIN_FORKNUM, xlrec->target.node, 
+						pageinfo_add(MAIN_FORKNUM, xlrec->target.node,
 									 ItemPointerGetBlockNumber(&xlrec->target.tid));
 						break;
 					}
@@ -366,7 +366,7 @@ extractPageInfo(XLogRecord *record)
 					{
 						xl_heap_freeze *xlrec =
 							(xl_heap_freeze *) XLogRecGetData(record);
-					
+
 						pageinfo_add(MAIN_FORKNUM, xlrec->node, xlrec->block);
 						break;
 					}
@@ -636,7 +636,7 @@ extractPageInfo(XLogRecord *record)
 					{
 						gistxlogPageUpdate *xlrec =
 							(gistxlogPageUpdate *) XLogRecGetData(record);
-						
+
 						pageinfo_add(MAIN_FORKNUM, xlrec->node, xlrec->blkno);
 						break;
 					}
@@ -644,7 +644,7 @@ extractPageInfo(XLogRecord *record)
 					{
 						/*
 						 * See decodePageSplitRecord function in backend.
-						 */ 
+						 */
 						char	   *begin = XLogRecGetData(record),
 								   *ptr;
 						int			j,
@@ -823,7 +823,7 @@ extractPageInfo(XLogRecord *record)
 				default:
 					fprintf(stderr, "unrecognized smgr record type %d\n", info);
 					exit(1);
-			}	
+			}
 			break;
 
 
@@ -868,7 +868,7 @@ extractPageInfo(XLogRecord *record)
 					 * here. If there are any files in them, they will be
 					 * handled as usual.
 					 */
-					break;	
+					break;
 
 				default:
 					fprintf(stderr, "unrecognized dbase record type %d\n", info);

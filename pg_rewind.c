@@ -368,7 +368,7 @@ findCommonAncestorTimeline(XLogRecPtr *recptr, TimeLineID *tli)
 			return;
 		}
 	}
-	
+
 	fprintf(stderr, "could not find common ancestor of the source and target cluster's timelines\n");
 	exit(1);
 }
@@ -393,7 +393,7 @@ createBackupLabel(XLogRecPtr startpoint, TimeLineID starttli, XLogRecPtr checkpo
 		return;
 
 	XLByteToSeg(startpoint, startsegno);
-	XLogFileName(xlogfilename, starttli, startsegno);	
+	XLogFileName(xlogfilename, starttli, startsegno);
 
 	/*
 	 * TODO: move old file out of the way, if any. And perhaps create the
