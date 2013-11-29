@@ -255,14 +255,6 @@ main(int argc, char **argv)
 	if (verbose)
 		print_filemap();
 
-/*
-	if (dry_run)
-	{
-		printf("stopped before modifying target.\n");
-		exit(0);
-	}
-*/
-
 	/* Ok, we're ready to start copying things over. */
 	executeFileMap();
 
