@@ -142,6 +142,7 @@ findLastCheckpoint(const char *datadir, XLogRecPtr searchptr, TimeLineID tli,
 {
 	/* Walk backwards, starting from the given record */
 	XLogRecord *record;
+	XLogRecPtr forkptr = searchptr;
 	XLogReaderState *xlogreader;
 	char	   *errormsg;
 	XLogPageReadPrivate private;
@@ -164,9 +165,15 @@ findLastCheckpoint(const char *datadir, XLogRecPtr searchptr, TimeLineID tli,
 			exit(1);
 		}
 
-		/* Check if it is a checkpoint record */
+		/*
+		 * Check if it is a checkpoint record. This checkpoint record
+		 * needs to be the latest checkpoint before WAL forked and not
+		 * the checkpoint where the master has been stopped to be
+		 * rewinded.
+		 */
 		info = record->xl_info & ~XLR_INFO_MASK;
-		if (record->xl_rmid == RM_XLOG_ID &&
+		if (searchptr < forkptr &&
+			record->xl_rmid == RM_XLOG_ID &&
 			(info == XLOG_CHECKPOINT_SHUTDOWN || info == XLOG_CHECKPOINT_ONLINE))
 		{
 			CheckPoint	checkPoint;
