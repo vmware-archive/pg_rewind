@@ -50,6 +50,17 @@ starting from the last common checkpoint preceding the fork. Fetching missing
 files from a WAL archive is currently not supported. However, you can copy any
 missing files manually from the WAL archive to the pg_xlog directory.
 
+Regression tests
+----------------
+
+The test suite of pg_rewind can be launched simply, similarly to what vanilla
+PostgreSQL extensions do.
+
+1) Copy code inside PostgreSQL code tree as contrib/pg_rewind:
+    make check
+
+2) Manage it as an independent module:
+    make check USE_PGXS=1 top_srcdir=<path to PostgreSQL source tree>
 
 Theory of operation
 -------------------
