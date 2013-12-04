@@ -51,3 +51,9 @@ endif
 xlogreader.c: % : $(top_srcdir)/src/backend/access/transam/%
 	rm -f $@ && $(LN_S) $< .
 
+# Regression tests
+check: test.sh all
+	# Use a remote connection with source server
+	MAKE=$(MAKE) bindir=$(bindir) libdir=$(libdir) $(SHELL) $< --remote
+	# Use a data folder as source server
+	MAKE=$(MAKE) bindir=$(bindir) libdir=$(libdir) $(SHELL) $< --local
