@@ -66,7 +66,7 @@ PGHOSTADDR="";        unset PGHOSTADDR
 # Define non conflicting ports for both nodes, this could be a bit
 # smarter with for example dynamic port recognition using psql but
 # this will make it for now.
-PG_VERSION_NUM=90301
+PG_VERSION_NUM=90401
 PORT_MASTER=`expr $PG_VERSION_NUM % 16384 + 49152`
 PORT_STANDBY=`expr $PORT_MASTER + 1`
 
