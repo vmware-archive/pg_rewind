@@ -562,8 +562,6 @@ extractPageInfo(XLogRecord *record)
 
 						pageinfo_add(MAIN_FORKNUM, data->node, data->lblkno);
 						pageinfo_add(MAIN_FORKNUM, data->node, data->rblkno);
-						if (data->isRootSplit)
-							pageinfo_add(MAIN_FORKNUM, data->node, data->rootBlkno);
 						break;
 					}
 				case XLOG_GIN_VACUUM_PAGE:
