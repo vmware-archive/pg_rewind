@@ -18,6 +18,7 @@
 #include "access/xlog_internal.h"
 #include "catalog/catversion.h"
 #include "catalog/pg_control.h"
+#include "storage/bufpage.h"
 
 #include "getopt_long.h"
 
@@ -282,6 +283,16 @@ sanityChecks(void)
 		ControlFile_source.catalog_version_no != CATALOG_VERSION_NO)
 	{
 		fprintf(stderr, "clusters are not compatible with this version of pg_rewind\n");
+		exit(1);
+	}
+
+	/*
+	 * Target cluster need to use checksums, this to prevent from data
+	 * corruption that could occur because of hint bits.
+	 */
+	if (ControlFile_target.data_checksum_version != PG_DATA_CHECKSUM_VERSION)
+	{
+		fprintf(stderr, "target master need to use data checksums.\n");
 		exit(1);
 	}
 

@@ -84,6 +84,12 @@ failover. (pg_rewind doesn't actually apply the WAL, it just creates a backup
 label file indicating that when PostgreSQL is started, it will start replay
 from that checkpoint and apply all the required WAL)
 
+Restrictions
+------------
+
+pg_rewind needs that cluster uses data checksums to prevent data corruption that
+might occur because of hint bits.
+
 TODO
 ----
 
