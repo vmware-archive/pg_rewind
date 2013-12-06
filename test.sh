@@ -70,9 +70,9 @@ PG_VERSION_NUM=90401
 PORT_MASTER=`expr $PG_VERSION_NUM % 16384 + 49152`
 PORT_STANDBY=`expr $PORT_MASTER + 1`
 
-# Initialize master
+# Initialize master, data checksums are mandatory
 rm -rf $TEST_MASTER
-initdb -D $TEST_MASTER
+initdb -D $TEST_MASTER --data-checksums
 
 # Custom parameters for master's postgresql.conf
 cat >> $TEST_MASTER/postgresql.conf <<EOF
