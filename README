@@ -87,8 +87,9 @@ from that checkpoint and apply all the required WAL)
 Restrictions
 ------------
 
-pg_rewind needs that cluster uses data checksums to prevent data corruption that
-might occur because of hint bits.
+pg_rewind needs that cluster uses either data checksums that can be enabled
+at server initialization with initdb or WAL logging of hint bits that can
+be enabled by settings "wal_log_hintbits = on" in postgresql.conf.
 
 TODO
 ----

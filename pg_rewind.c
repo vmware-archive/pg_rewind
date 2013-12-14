@@ -183,7 +183,6 @@ main(int argc, char **argv)
 	digestControlFile(&ControlFile_source, buffer, size);
 	pg_free(buffer);
 
-
 	sanityChecks();
 
 	/*
@@ -287,12 +286,13 @@ sanityChecks(void)
 	}
 
 	/*
-	 * Target cluster need to use checksums, this to prevent from data
-	 * corruption that could occur because of hint bits.
+	 * Target cluster need to use checksums or hint bit wal-logging, this to
+	 * prevent from data corruption that could occur because of hint bits.
 	 */
-	if (ControlFile_target.data_checksum_version != PG_DATA_CHECKSUM_VERSION)
+	if (ControlFile_target.data_checksum_version != PG_DATA_CHECKSUM_VERSION &&
+		!ControlFile_target.wal_log_hintbits)
 	{
-		fprintf(stderr, "target master need to use data checksums.\n");
+		fprintf(stderr, "target master need to use either data checksums or \"wal_log_hintbits = on\".\n");
 		exit(1);
 	}
 

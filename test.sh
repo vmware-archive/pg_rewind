@@ -70,9 +70,9 @@ PG_VERSION_NUM=90401
 PORT_MASTER=`expr $PG_VERSION_NUM % 16384 + 49152`
 PORT_STANDBY=`expr $PORT_MASTER + 1`
 
-# Initialize master, data checksums are mandatory
+# Initialize master
 rm -rf $TEST_MASTER
-initdb -D $TEST_MASTER --data-checksums
+initdb -D $TEST_MASTER
 
 # Custom parameters for master's postgresql.conf
 cat >> $TEST_MASTER/postgresql.conf <<EOF
@@ -83,6 +83,7 @@ checkpoint_segments = 50
 shared_buffers = 1MB
 log_line_prefix = 'M  %m %p '
 hot_standby = on
+wal_log_hintbits = on
 autovacuum = off
 max_connections = 50
 listen_addresses = '$LISTEN_ADDRESSES'
