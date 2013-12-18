@@ -65,7 +65,7 @@ usage(const char *progname)
 	printf("  -V, --version  output version information, then exit\n");
 	printf("  -?, --help     show this help, then exit\n");
 	printf("\n");
-	printf("Report bugs to <xxx>.\n");
+	printf("Report bugs to https://github.com/vmware/pg_rewind.\n");
 }
 
 
