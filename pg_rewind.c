@@ -290,9 +290,9 @@ sanityChecks(void)
 	 * prevent from data corruption that could occur because of hint bits.
 	 */
 	if (ControlFile_target.data_checksum_version != PG_DATA_CHECKSUM_VERSION &&
-		!ControlFile_target.wal_log_hintbits)
+		!ControlFile_target.wal_log_hints)
 	{
-		fprintf(stderr, "target master need to use either data checksums or \"wal_log_hintbits = on\".\n");
+		fprintf(stderr, "target master need to use either data checksums or \"wal_log_hints = on\".\n");
 		exit(1);
 	}
 
