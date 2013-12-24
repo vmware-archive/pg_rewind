@@ -369,10 +369,10 @@ extractPageInfo(XLogRecord *record)
 		case RM_HEAP2_ID:
 			switch (info & XLOG_HEAP_OPMASK)
 			{
-				case XLOG_HEAP2_FREEZE:
+				case XLOG_HEAP2_FREEZE_PAGE:
 					{
-						xl_heap_freeze *xlrec =
-							(xl_heap_freeze *) XLogRecGetData(record);
+						xl_heap_freeze_page *xlrec =
+							(xl_heap_freeze_page *) XLogRecGetData(record);
 
 						pageinfo_add(MAIN_FORKNUM, xlrec->node, xlrec->block);
 						break;
