@@ -311,7 +311,7 @@ copy_executeFileMap(filemap_t *map)
 				break;
 
 			case FILE_ACTION_CREATEDIR:
-				create_target_dir(entry->path);
+				create_target_dir(entry->path, entry->issymlink, entry->symlink_path);
 				break;
 		}
 	}
@@ -355,9 +355,12 @@ truncate_target_file(const char *path, off_t newsize)
 	}
 }
 
-
+/*
+ *  At specified path create symbolic link if issymlink is TRUE,
+ *  otherwise create direcory.
+ */
 void
-create_target_dir(const char *path)
+create_target_dir(const char *path, bool issymlink, char *symlink_path)
 {
 	char		dstpath[MAXPGPATH];
 
@@ -365,11 +368,16 @@ create_target_dir(const char *path)
 		return;
 
 	snprintf(dstpath, sizeof(dstpath), "%s/%s", datadir_target, path);
-	if (mkdir(dstpath, S_IRWXU) != 0)
+	if(issymlink && symlink(symlink_path, dstpath) != 0)
+	{
+		fprintf(stderr, "could not create symbolic link \"%s\": %s\n",
+				dstpath, strerror(errno));
+		exit(1);
+	}
+	else if(!issymlink && mkdir(dstpath, S_IRWXU) != 0)
 	{
 		fprintf(stderr, "could not create directory \"%s\": %s\n",
 				dstpath, strerror(errno));
-		exit(1);
 	}
 }
 

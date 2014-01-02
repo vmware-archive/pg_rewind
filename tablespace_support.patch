@@ -1,0 +1,274 @@
+diff --git a/README b/README
+index 26911e2..ef73a88 100644
+--- a/README
++++ b/README
+@@ -94,7 +94,7 @@ be enabled by settings "wal_log_hints = on" in postgresql.conf.
+ TODO
+ ----
+ 
+-* tablespace support
++* initdb --xlogdir support
+ 
+ License
+ -------
+diff --git a/copy_fetch.c b/copy_fetch.c
+index 20d7120..e561b9f 100644
+--- a/copy_fetch.c
++++ b/copy_fetch.c
+@@ -311,7 +311,7 @@ copy_executeFileMap(filemap_t *map)
+ 				break;
+ 
+ 			case FILE_ACTION_CREATEDIR:
+-				create_target_dir(entry->path);
++				create_target_dir(entry->path, entry->issymlink, entry->symlink_path);
+ 				break;
+ 		}
+ 	}
+@@ -355,9 +355,12 @@ truncate_target_file(const char *path, off_t newsize)
+ 	}
+ }
+ 
+-
++/*
++ *  At specified path create symbolic link if issymlink is TRUE,
++ *  otherwise create direcory.
++ */
+ void
+-create_target_dir(const char *path)
++create_target_dir(const char *path, bool issymlink, char *symlink_path)
+ {
+ 	char		dstpath[MAXPGPATH];
+ 
+@@ -365,12 +368,17 @@ create_target_dir(const char *path)
+ 		return;
+ 
+ 	snprintf(dstpath, sizeof(dstpath), "%s/%s", datadir_target, path);
+-	if (mkdir(dstpath, S_IRWXU) != 0)
++	if(issymlink && symlink(symlink_path, dstpath) != 0)
+ 	{
+-		fprintf(stderr, "could not create directory \"%s\": %s\n",
++		fprintf(stderr, "could not create symbolic link \"%s\": %s\n",
+ 				dstpath, strerror(errno));
+ 		exit(1);
+ 	}
++	else if(!issymlink && mkdir(dstpath, S_IRWXU) != 0)
++	{
++		fprintf(stderr, "could not create directory \"%s\": %s\n",
++				dstpath, strerror(errno));
++	}
+ }
+ 
+ static void
+diff --git a/fetch.h b/fetch.h
+index de2b635..9d41207 100644
+--- a/fetch.h
++++ b/fetch.h
+@@ -49,7 +49,7 @@ extern void traverse_datadir(const char *datadir, process_file_callback_t callba
+ 
+ extern void remove_target_file(const char *path);
+ extern void truncate_target_file(const char *path, off_t newsize);
+-extern void create_target_dir(const char *path);
++extern void create_target_dir(const char *path, bool issymlink, char *symlink_path);
+ extern void check_samefile(int fd1, int fd2);
+ 
+ 
+diff --git a/filemap.c b/filemap.c
+index 861e71d..f081f29 100644
+--- a/filemap.c
++++ b/filemap.c
+@@ -10,6 +10,7 @@
+ #include <sys/stat.h>
+ #include <unistd.h>
+ #include <regex.h>
++#include <libpq-fe.h>
+ 
+ #include "datapagemap.h"
+ #include "filemap.h"
+@@ -20,6 +21,8 @@ filemap_t *filemap = NULL;
+ 
+ static bool isRelDataFile(const char *path);
+ static int path_cmp(const void *a, const void *b);
++bool extract_tablespace_oid(const char *localpath, char *tablespace_oid);
++void extract_tablespace_mount_point(char *tablespace_oid, char *tablespace_location);
+ 
+ 
+ /*****
+@@ -56,13 +59,53 @@ endswith(const char *haystack, const char *needle)
+ }
+ 
+ /*
++ * Extract the oid of tablespace.
++ */
++bool
++extract_tablespace_oid(const char *localpath, char *tablespace_oid)
++{
++	int  traverseptr = 0;
++	int  counter = 0;
++	char *temporary_part = NULL;
++	char remaining_part[MAXPGPATH];
++	bool found = true;
++
++	temporary_part = strstr(localpath, "pg_tblspc");
++	if (temporary_part == NULL)
++		return false;
++	else
++	{
++		traverseptr = temporary_part - localpath;
++		while(localpath[traverseptr] != '\0')
++			if(localpath[traverseptr++] == '/')
++				break;
++		while(localpath[traverseptr] != '\0')
++		{
++			if(localpath[traverseptr] == '/')
++			{
++				found = false;
++				break;
++			}
++			remaining_part[counter++] = localpath[traverseptr++];
++		}
++	}
++	remaining_part[counter] = '\0';
++	if(found)
++		strcpy(tablespace_oid, remaining_part);
++	return found;
++}
++
++/*
+  * Callback for processing remote file list.
+  */
+ void
+ process_remote_file(const char *path, size_t newsize, bool isdir)
+ {
+ 	bool		exists;
++	bool		issymlink;
+ 	char		localpath[MAXPGPATH];
++	char 		tablespace_oid[MAXPGPATH];
++	char 		symlink_path[MAXPGPATH];
+ 	struct stat statbuf;
+ 	filemap_t  *map = filemap;
+ 	file_action_t action;
+@@ -85,7 +128,15 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
+ 	if (lstat(localpath, &statbuf) < 0)
+ 	{
+ 		if (errno == ENOENT)
++		{
+ 			exists = false;
++			if(extract_tablespace_oid(localpath, tablespace_oid))
++			{
++				issymlink = true;
++				extract_tablespace_mount_point(tablespace_oid, symlink_path);
++				strcpy(tablespace_oid, "");
++			}
++		}
+ 		else
+ 		{
+ 			fprintf(stderr, "could not stat file \"%s\": %s",
+@@ -93,6 +144,11 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
+ 			exit(1);
+ 		}
+ 	}
++	else if (!S_ISREG(statbuf.st_mode) && !S_ISDIR(statbuf.st_mode))
++	{
++		/* it's a symbolic link. */
++		isdir=true;
++	}
+ 	else if (isdir && !S_ISDIR(statbuf.st_mode))
+ 	{
+ 		/* it's a directory in target, but not in source. Strange.. */
+@@ -105,13 +161,6 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
+ 		fprintf(stderr, "\"%s\" is not a regular file.\n", localpath);
+ 		exit(1);
+ 	}
+-	else if (!S_ISREG(statbuf.st_mode) && !S_ISDIR(statbuf.st_mode))
+-	{
+-		/* not a file, and not a directory. */
+-		/* TODO I think we need to handle symbolic links here */
+-		fprintf(stderr, "\"%s\" is not a regular file.\n", localpath);
+-		exit(1);
+-	}
+ 	else
+ 		exists = true;
+ 
+@@ -176,6 +225,8 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
+ 	entry = pg_malloc(sizeof(file_entry_t));
+ 	entry->path = pg_strdup(path);
+ 	entry->isdir = isdir;
++	entry->issymlink = issymlink;
++	entry->symlink_path = pg_strdup(symlink_path);
+ 	entry->action = action;
+ 	entry->oldsize = oldsize;
+ 	entry->newsize = newsize;
+@@ -396,7 +447,7 @@ isRelDataFile(const char *path)
+ 	if (!regexps_compiled)
+ 	{
+ 		/* If you change this, also update the regexp in libpq_fetch.c */
+-		const char *datasegment_regex_str = "(global|base/[0-9]+)/[0-9]+$";
++		const char *datasegment_regex_str = "(global|base/[0-9]+|pg_tblspc/[0-9]+/[PG_0-9.0-9_0-9]+/[0-9]+)/[0-9]*+$";
+ 		rc = regcomp(&datasegment_regex, datasegment_regex_str, REG_NOSUB | REG_EXTENDED);
+ 		if (rc != 0)
+ 		{
+diff --git a/filemap.h b/filemap.h
+index 1c20c43..6e4db56 100644
+--- a/filemap.h
++++ b/filemap.h
+@@ -31,8 +31,9 @@ typedef enum
+ struct file_entry_t
+ {
+ 	char	   *path;
++	char 	   *symlink_path;
+ 	bool		isdir;
+-
++	bool		issymlink;
+ 	file_action_t action;
+ 
+ 	size_t		oldsize;
+diff --git a/libpq_fetch.c b/libpq_fetch.c
+index 60e3f25..327550c 100644
+--- a/libpq_fetch.c
++++ b/libpq_fetch.c
+@@ -49,6 +49,36 @@ libpqConnect(const char *connstr)
+ }
+ 
+ /*
++ * Get the mount point of tablespace.
++ */
++void
++extract_tablespace_mount_point(char *tablespace_oid, char *tablespace_location)
++{
++	PGresult   *res;
++	char sql[MAXPGPATH];
++	snprintf(sql, MAXPGPATH, "%s%s%s", "select * from pg_tablespace_location\(", tablespace_oid, ")");
++	res = PQexec(conn, sql);
++	if (PQresultStatus(res) != PGRES_TUPLES_OK)
++	{
++		fprintf(stderr, "unexpected result while calculating the location of tablespace %s\n",
++			PQresultErrorMessage(res));
++		exit(1);
++	}
++
++	/* sanity check the result set */
++	if (!(PQnfields(res) == 1))
++	{
++		fprintf(stderr, "unexpected result while calculating the location of tablespace\n");
++		exit(1);
++	}
++	else
++	{
++		char *path = PQgetvalue(res, 0, 0);
++		strcpy(tablespace_location, path);
++	}
++}
++
++/*
+  * Get a file list.
+  */
+ void
+@@ -337,7 +367,7 @@ libpq_executeFileMap(filemap_t *map)
+ 				break;
+ 
+ 			case FILE_ACTION_CREATEDIR:
+-				create_target_dir(entry->path);
++				create_target_dir(entry->path, entry->issymlink, entry->symlink_path);
+ 				break;
+ 		}
+ 	}
