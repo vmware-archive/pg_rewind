@@ -94,7 +94,7 @@ be enabled by settings "wal_log_hints = on" in postgresql.conf.
 TODO
 ----
 
-* tablespace support
+* initdb --xlogdir support
 
 License
 -------
