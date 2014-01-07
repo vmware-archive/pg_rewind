@@ -10,7 +10,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <regex.h>
-#include <libpq-fe.h>
 
 #include "datapagemap.h"
 #include "filemap.h"
@@ -21,8 +20,6 @@ filemap_t *filemap = NULL;
 
 static bool isRelDataFile(const char *path);
 static int path_cmp(const void *a, const void *b);
-bool extract_tablespace_oid(const char *localpath, char *tablespace_oid);
-void extract_tablespace_mount_point(char *tablespace_oid, char *tablespace_location);
 
 
 /*****
@@ -59,53 +56,13 @@ endswith(const char *haystack, const char *needle)
 }
 
 /*
- * Extract the oid of tablespace.
- */
-bool
-extract_tablespace_oid(const char *localpath, char *tablespace_oid)
-{
-	int  traverseptr = 0;
-	int  counter = 0;
-	char *temporary_part = NULL;
-	char remaining_part[MAXPGPATH];
-	bool found = true;
-
-	temporary_part = strstr(localpath, "pg_tblspc");
-	if (temporary_part == NULL)
-		return false;
-	else
-	{
-		traverseptr = temporary_part - localpath;
-		while(localpath[traverseptr] != '\0')
-			if(localpath[traverseptr++] == '/')
-				break;
-		while(localpath[traverseptr] != '\0')
-		{
-			if(localpath[traverseptr] == '/')
-			{
-				found = false;
-				break;
-			}
-			remaining_part[counter++] = localpath[traverseptr++];
-		}
-	}
-	remaining_part[counter] = '\0';
-	if(found)
-		strcpy(tablespace_oid, remaining_part);
-	return found;
-}
-
-/*
  * Callback for processing remote file list.
  */
 void
 process_remote_file(const char *path, size_t newsize, bool isdir)
 {
 	bool		exists;
-	bool		issymlink;
 	char		localpath[MAXPGPATH];
-	char 		tablespace_oid[MAXPGPATH];
-	char 		symlink_path[MAXPGPATH];
 	struct stat statbuf;
 	filemap_t  *map = filemap;
 	file_action_t action;
@@ -128,26 +85,13 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
 	if (lstat(localpath, &statbuf) < 0)
 	{
 		if (errno == ENOENT)
-		{
 			exists = false;
-			if(extract_tablespace_oid(localpath, tablespace_oid))
-			{
-				issymlink = true;
-				extract_tablespace_mount_point(tablespace_oid, symlink_path);
-				strcpy(tablespace_oid, "");
-			}
-		}
 		else
 		{
 			fprintf(stderr, "could not stat file \"%s\": %s",
 					localpath, strerror(errno));
 			exit(1);
 		}
-	}
-	else if (!S_ISREG(statbuf.st_mode) && !S_ISDIR(statbuf.st_mode))
-	{
-		/* it's a symbolic link. */
-		isdir=true;
 	}
 	else if (isdir && !S_ISDIR(statbuf.st_mode))
 	{
@@ -158,6 +102,13 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
 	else if (!isdir && S_ISDIR(statbuf.st_mode))
 	{
 		/* it's a directory in source, but not in target. Strange.. */
+		fprintf(stderr, "\"%s\" is not a regular file.\n", localpath);
+		exit(1);
+	}
+	else if (!S_ISREG(statbuf.st_mode) && !S_ISDIR(statbuf.st_mode))
+	{
+		/* not a file, and not a directory. */
+		/* TODO I think we need to handle symbolic links here */
 		fprintf(stderr, "\"%s\" is not a regular file.\n", localpath);
 		exit(1);
 	}
@@ -225,8 +176,6 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
 	entry = pg_malloc(sizeof(file_entry_t));
 	entry->path = pg_strdup(path);
 	entry->isdir = isdir;
-	entry->issymlink = issymlink;
-	entry->symlink_path = pg_strdup(symlink_path);
 	entry->action = action;
 	entry->oldsize = oldsize;
 	entry->newsize = newsize;
@@ -447,7 +396,7 @@ isRelDataFile(const char *path)
 	if (!regexps_compiled)
 	{
 		/* If you change this, also update the regexp in libpq_fetch.c */
-		const char *datasegment_regex_str = "(global|base/[0-9]+|pg_tblspc/[0-9]+/[PG_0-9.0-9_0-9]+/[0-9]+)/[0-9]*+$";
+		const char *datasegment_regex_str = "(global|base/[0-9]+)/[0-9]+$";
 		rc = regcomp(&datasegment_regex, datasegment_regex_str, REG_NOSUB | REG_EXTENDED);
 		if (rc != 0)
 		{

@@ -49,36 +49,6 @@ libpqConnect(const char *connstr)
 }
 
 /*
- * Get the mount point of tablespace.
- */
-void
-extract_tablespace_mount_point(char *tablespace_oid, char *tablespace_location)
-{
-	PGresult   *res;
-	char sql[MAXPGPATH];
-	snprintf(sql, MAXPGPATH, "%s%s%s", "select * from pg_tablespace_location\(", tablespace_oid, ")");
-	res = PQexec(conn, sql);
-	if (PQresultStatus(res) != PGRES_TUPLES_OK)
-	{
-		fprintf(stderr, "unexpected result while calculating the location of tablespace %s\n",
-			PQresultErrorMessage(res));
-		exit(1);
-	}
-
-	/* sanity check the result set */
-	if (!(PQnfields(res) == 1))
-	{
-		fprintf(stderr, "unexpected result while calculating the location of tablespace\n");
-		exit(1);
-	}
-	else
-	{
-		char *path = PQgetvalue(res, 0, 0);
-		strcpy(tablespace_location, path);
-	}
-}
-
-/*
  * Get a file list.
  */
 void
@@ -367,7 +337,7 @@ libpq_executeFileMap(filemap_t *map)
 				break;
 
 			case FILE_ACTION_CREATEDIR:
-				create_target_dir(entry->path, entry->issymlink, entry->symlink_path);
+				create_target_dir(entry->path);
 				break;
 		}
 	}

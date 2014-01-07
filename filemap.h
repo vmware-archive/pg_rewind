@@ -31,9 +31,8 @@ typedef enum
 struct file_entry_t
 {
 	char	   *path;
-	char 	   *symlink_path;
 	bool		isdir;
-	bool		issymlink;
+
 	file_action_t action;
 
 	size_t		oldsize;
