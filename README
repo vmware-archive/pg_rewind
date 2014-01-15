@@ -60,7 +60,7 @@ PostgreSQL extensions do.
     make check
 
 2) Manage it as an independent module:
-    make check USE_PGXS=1 top_srcdir=<path to PostgreSQL source tree>
+    make installcheck USE_PGXS=1
 
 Theory of operation
 -------------------
