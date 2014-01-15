@@ -10,6 +10,8 @@ PROGRAM = pg_rewind
 OBJS	= pg_rewind.o parsexlog.o xlogreader.o util.o datapagemap.o timeline.o \
 	fetch.o copy_fetch.o libpq_fetch.o filemap.o
 
+REGRESS = pg_rewind_local pg_rewind_remote
+
 PG_CPPFLAGS = -I$(libpq_srcdir)
 PG_LIBS = $(libpq_pgport)
 
@@ -51,9 +53,3 @@ endif
 xlogreader.c: % : $(top_srcdir)/src/backend/access/transam/%
 	rm -f $@ && $(LN_S) $< .
 
-# Regression tests
-check: test.sh all
-	# Use a remote connection with source server
-	MAKE=$(MAKE) bindir=$(bindir) libdir=$(libdir) $(SHELL) $< --remote
-	# Use a data folder as source server
-	MAKE=$(MAKE) bindir=$(bindir) libdir=$(libdir) $(SHELL) $< --local

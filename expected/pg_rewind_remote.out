@@ -1,0 +1,8 @@
+\! sh sql/pg_rewind.sh --remote
+              d              
+-----------------------------
+ in master
+ in master, before promotion
+ in standby, after promotion
+(3 rows)
+
