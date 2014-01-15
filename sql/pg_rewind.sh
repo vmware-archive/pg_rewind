@@ -68,13 +68,13 @@ PGHOSTADDR="";        unset PGHOSTADDR
 # Define non conflicting ports for both nodes, this could be a bit
 # smarter with for example dynamic port recognition using psql but
 # this will make it for now.
-PG_VERSION_NUM=90301
+PG_VERSION_NUM=90401
 PORT_MASTER=`expr $PG_VERSION_NUM % 16384 + 49152`
 PORT_STANDBY=`expr $PORT_MASTER + 1`
 
 # Initialize master, data checksums are mandatory
 rm -rf $TEST_MASTER
-initdb -D $TEST_MASTER --data-checksums >>$log_path 2>&1
+initdb -D $TEST_MASTER >>$log_path 2>&1
 
 # Custom parameters for master's postgresql.conf
 cat >> $TEST_MASTER/postgresql.conf <<EOF
@@ -83,6 +83,7 @@ max_wal_senders = 2
 wal_keep_segments = 20
 checkpoint_segments = 50
 shared_buffers = 1MB
+wal_log_hints = on
 log_line_prefix = 'M  %m %p '
 hot_standby = on
 autovacuum = off
