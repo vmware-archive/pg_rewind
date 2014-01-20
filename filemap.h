@@ -32,7 +32,7 @@ struct file_entry_t
 {
 	char	   *path;
 	bool		isdir;
-
+	bool		issymlink;
 	file_action_t action;
 
 	size_t		oldsize;
@@ -71,5 +71,6 @@ extern void print_filemap(void);
 extern void process_remote_file(const char *path, size_t newsize, bool isdir);
 extern void process_local_file(const char *path, size_t newsize, bool isdir);
 extern void process_block_change(ForkNumber forknum, RelFileNode rnode, BlockNumber blkno);
+extern bool isTablespace(const char *localpath);
 
 #endif   /* FILEMAP_H */
