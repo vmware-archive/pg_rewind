@@ -165,9 +165,9 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
 		 */
 		oldsize = statbuf.st_size;
 		if (oldsize < newsize)
-			action = FILE_ACTION_TRUNCATE;
-		else if (oldsize > newsize)
 			action = FILE_ACTION_COPY_TAIL;
+		else if (oldsize > newsize)
+			action = FILE_ACTION_TRUNCATE;
 		else
 			action = FILE_ACTION_NONE;
 	}
