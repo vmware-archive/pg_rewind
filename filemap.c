@@ -56,13 +56,62 @@ endswith(const char *haystack, const char *needle)
 }
 
 /*
+ *   Does it look like a tablespace ?
+ */
+bool
+isTablespace(const char *localpath)
+{
+	int  traverseptr = 0;
+	char *traverseptr_str = NULL;
+	char *temporary_part = NULL;
+	bool found = true;
+
+	temporary_part = strstr(localpath, "pg_tblspc");
+
+	if (temporary_part == NULL)
+		return false;
+	else
+	{
+		while(true)
+		{
+			temporary_part++;
+			traverseptr_str = NULL;
+			traverseptr_str = strstr(temporary_part, "pg_tblspc");
+			if(traverseptr_str != NULL)
+				temporary_part = traverseptr_str;
+			else
+				break;
+		}
+		traverseptr = temporary_part - localpath;
+
+		while(localpath[traverseptr] != '\0')
+			if(localpath[traverseptr++] == '/')
+				break;
+
+		if(localpath[traverseptr] == '\0')
+			found = false;
+
+		while(localpath[traverseptr] != '\0')
+			if(localpath[traverseptr++] == '/')
+			{
+				found = false;
+				break;
+			}
+	}
+	return found;
+}
+
+/*
  * Callback for processing remote file list.
  */
 void
 process_remote_file(const char *path, size_t newsize, bool isdir)
 {
 	bool		exists;
+	bool		issymlink = false;
 	char		localpath[MAXPGPATH];
+	char		symlink_path[MAXPGPATH];
+	int		bufferlen;
 	struct stat statbuf;
 	filemap_t  *map = filemap;
 	file_action_t action;
@@ -85,13 +134,36 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
 	if (lstat(localpath, &statbuf) < 0)
 	{
 		if (errno == ENOENT)
+		{
 			exists = false;
+			if(isTablespace(localpath))
+			{
+				issymlink = true;
+				snprintf(symlink_path, sizeof(symlink_path), "%s", path);
+			}
+		}
 		else
 		{
 			fprintf(stderr, "could not stat file \"%s\": %s",
 					localpath, strerror(errno));
 			exit(1);
 		}
+	}
+	else if (!S_ISREG(statbuf.st_mode) && !S_ISDIR(statbuf.st_mode))
+	{
+		/* it's a symbolic link. */
+		isdir = true;
+		issymlink = true;
+
+		if ((bufferlen = readlink(localpath, symlink_path, sizeof(symlink_path)-1)) != -1)
+			symlink_path[bufferlen] = '\0';
+		else
+		{
+			fprintf(stderr, "could not stat symbolic link \"%s\": %s",
+					localpath, strerror(errno));
+			exit(1);
+		}
+
 	}
 	else if (isdir && !S_ISDIR(statbuf.st_mode))
 	{
@@ -102,13 +174,6 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
 	else if (!isdir && S_ISDIR(statbuf.st_mode))
 	{
 		/* it's a directory in source, but not in target. Strange.. */
-		fprintf(stderr, "\"%s\" is not a regular file.\n", localpath);
-		exit(1);
-	}
-	else if (!S_ISREG(statbuf.st_mode) && !S_ISDIR(statbuf.st_mode))
-	{
-		/* not a file, and not a directory. */
-		/* TODO I think we need to handle symbolic links here */
 		fprintf(stderr, "\"%s\" is not a regular file.\n", localpath);
 		exit(1);
 	}
@@ -174,8 +239,12 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
 
 	/* Create a new entry for this file */
 	entry = pg_malloc(sizeof(file_entry_t));
-	entry->path = pg_strdup(path);
+	if(issymlink)
+		entry->path = pg_strdup(symlink_path);
+	else
+		entry->path = pg_strdup(path);
 	entry->isdir = isdir;
+	entry->issymlink = issymlink;
 	entry->action = action;
 	entry->oldsize = oldsize;
 	entry->newsize = newsize;
@@ -396,7 +465,7 @@ isRelDataFile(const char *path)
 	if (!regexps_compiled)
 	{
 		/* If you change this, also update the regexp in libpq_fetch.c */
-		const char *datasegment_regex_str = "(global|base/[0-9]+)/[0-9]+$";
+		const char *datasegment_regex_str = "(global|base/[0-9]+|pg_tblspc/[0-9]+/[PG_0-9.0-9_0-9]+/[0-9]+)/[0-9]*+$";
 		rc = regcomp(&datasegment_regex, datasegment_regex_str, REG_NOSUB | REG_EXTENDED);
 		if (rc != 0)
 		{
