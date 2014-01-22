@@ -144,12 +144,12 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
 		/*
 		 * It's a data file that exists in both.
 		 *
-		 * If it's smaller in target, we can truncate it. There will also be
+		 * If it's larger in target, we can truncate it. There will also be
 		 * a WAL record of the truncation in the source system, so WAL replay
 		 * would eventually truncate the target too, but we might as well do
 		 * it now.
 		 *
-		 * If it's larger in the target, it means that it has been truncated
+		 * If it's smaller in the target, it means that it has been truncated
 		 * in the target, or enlarged in the source, or both. If it was
 		 * truncated locally, we need to copy the missing tail from the remote
 		 * system. If it was enlarged in the remote system, there will be WAL
@@ -165,9 +165,9 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
 		 */
 		oldsize = statbuf.st_size;
 		if (oldsize < newsize)
-			action = FILE_ACTION_TRUNCATE;
-		else if (oldsize > newsize)
 			action = FILE_ACTION_COPY_TAIL;
+		else if (oldsize > newsize)
+			action = FILE_ACTION_TRUNCATE;
 		else
 			action = FILE_ACTION_NONE;
 	}
