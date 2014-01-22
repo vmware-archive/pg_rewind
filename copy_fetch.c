@@ -74,6 +74,15 @@ recurse_dir(const char *datadir, const char *path,
 
 		snprintf(filepath, MAXPGPATH, "%s/%s", fulldirpath, xlde->d_name);
 
+		/*
+		 * Two clusters should not point to the same tablespace.
+		 */
+		if(isTablespace(filepath) && datadir_source != NULL)
+		{
+			printf("failed..tablespace on same machine could lead to data corruption.\n");
+			exit(0);
+		}
+
 		if (lstat(filepath, &fst) < 0)
 		{
 			fprintf(stderr, "warning: could not stat file \"%s\": %s",
@@ -311,7 +320,7 @@ copy_executeFileMap(filemap_t *map)
 				break;
 
 			case FILE_ACTION_CREATEDIR:
-				create_target_dir(entry->path);
+				create_target_dir(entry->path, entry->issymlink);
 				break;
 		}
 	}
@@ -356,8 +365,12 @@ truncate_target_file(const char *path, off_t newsize)
 }
 
 
+/*
+ *  Exit, if it is symbolic link to tablespace.
+ *  otherwise create direcory at path.
+ */
 void
-create_target_dir(const char *path)
+create_target_dir(const char *path, bool issymlink)
 {
 	char		dstpath[MAXPGPATH];
 
@@ -365,11 +378,16 @@ create_target_dir(const char *path)
 		return;
 
 	snprintf(dstpath, sizeof(dstpath), "%s/%s", datadir_target, path);
-	if (mkdir(dstpath, S_IRWXU) != 0)
+	if(issymlink)
+	{
+		fprintf(stderr, "could not create tablespace at \"%s\"",
+				dstpath);
+		exit(1);
+	}
+	else if(!issymlink && mkdir(dstpath, S_IRWXU) != 0)
 	{
 		fprintf(stderr, "could not create directory \"%s\": %s\n",
 				dstpath, strerror(errno));
-		exit(1);
 	}
 }
 

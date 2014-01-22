@@ -337,7 +337,7 @@ libpq_executeFileMap(filemap_t *map)
 				break;
 
 			case FILE_ACTION_CREATEDIR:
-				create_target_dir(entry->path);
+				create_target_dir(entry->path, entry->issymlink);
 				break;
 		}
 	}
