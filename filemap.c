@@ -62,6 +62,7 @@ bool
 isTablespace(const char *localpath)
 {
 	int  traverseptr = 0;
+	char *traverseptr_str = NULL;
 	char *temporary_part = NULL;
 	bool found = true;
 
@@ -71,6 +72,16 @@ isTablespace(const char *localpath)
 		return false;
 	else
 	{
+		while(true)
+		{
+			temporary_part++;
+			traverseptr_str = NULL;
+			traverseptr_str = strstr(temporary_part, "pg_tblspc");
+			if(traverseptr_str != NULL)
+				temporary_part = traverseptr_str;
+			else
+				break;
+		}
 		traverseptr = temporary_part - localpath;
 
 		while(localpath[traverseptr] != '\0')
