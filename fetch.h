@@ -47,7 +47,7 @@ extern char *slurpFile(const char *datadir, const char *path, size_t *filesize);
 typedef void (*process_file_callback_t) (const char *path, size_t size, bool isdir);
 extern void traverse_datadir(const char *datadir, process_file_callback_t callback);
 
-extern void remove_target_file(const char *path);
+extern void remove_target_file(const char *path, bool isdir);
 extern void truncate_target_file(const char *path, off_t newsize);
 extern void create_target_dir(const char *path);
 extern void check_samefile(int fd1, int fd2);

@@ -299,7 +299,7 @@ copy_executeFileMap(filemap_t *map)
 				break;
 
 			case FILE_ACTION_REMOVE:
-				remove_target_file(entry->path);
+				remove_target_file(entry->path, entry->isdir);
 				break;
 
 			case FILE_ACTION_TRUNCATE:
@@ -321,7 +321,7 @@ copy_executeFileMap(filemap_t *map)
 }
 
 void
-remove_target_file(const char *path)
+remove_target_file(const char *path, bool isdir)
 {
 	char		dstpath[MAXPGPATH];
 
@@ -329,7 +329,13 @@ remove_target_file(const char *path)
 		return;
 
 	snprintf(dstpath, sizeof(dstpath), "%s/%s", datadir_target, path);
-	if (unlink(dstpath) != 0)
+	if (isdir && rmdir(dstpath) != 0)
+	{
+		fprintf(stderr, "could not remove directory \"%s\": %s\n",
+				dstpath, strerror(errno));
+		exit(1);
+	}
+	else if (!isdir && unlink(dstpath) != 0)
 	{
 		fprintf(stderr, "could not remove file \"%s\": %s\n",
 				dstpath, strerror(errno));
