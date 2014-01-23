@@ -325,7 +325,7 @@ libpq_executeFileMap(filemap_t *map)
 				break;
 
 			case FILE_ACTION_REMOVE:
-				remove_target_file(entry->path);
+				remove_target_file(entry->path, entry->isdir);
 				break;
 
 			case FILE_ACTION_TRUNCATE:
