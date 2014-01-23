@@ -158,12 +158,12 @@ cp $TEST_MASTER/postgresql.conf $TESTROOT/master-postgresql.conf.tmp
 # Now launch the test suite
 if [ $TEST_SUITE == "local" ]; then
 	# Do rewind using a local pgdata as source
-	pg_rewind \
+	./pg_rewind \
 		--source-pgdata=$TEST_STANDBY \
 		--target-pgdata=$TEST_MASTER >>$log_path 2>&1
 elif [ $TEST_SUITE == "remote" ]; then
 	# Do rewind using a remote connection as source
-	pg_rewind \
+	./pg_rewind \
 		--source-server="port=$PORT_STANDBY dbname=postgres" \
 		--target-pgdata=$TEST_MASTER >>$log_path 2>&1
 else

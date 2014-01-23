@@ -11,6 +11,7 @@ OBJS	= pg_rewind.o parsexlog.o xlogreader.o util.o datapagemap.o timeline.o \
 	fetch.o copy_fetch.o libpq_fetch.o filemap.o
 
 REGRESS = pg_rewind_local pg_rewind_remote
+EXTRA_REGRESS_OPTS=--use-existing --launcher=./launcher
 
 PG_CPPFLAGS = -I$(libpq_srcdir)
 PG_LIBS = $(libpq_pgport)
