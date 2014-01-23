@@ -244,10 +244,11 @@ process_local_file(const char *path, size_t oldsize, bool isdir)
 	exists = bsearch(&key_ptr, map->array, map->nfiles, sizeof(file_entry_t *),
 					 path_cmp) != NULL;
 
-	/* Remove any file that doesn't exist in the remote system. */
+	/* Remove any file or folder that doesn't exist in the remote system. */
 	if (!exists)
 	{
-		action = FILE_ACTION_REMOVE;
+		/* Change action depending on entry type */
+		action = isdir ? FILE_ACTION_REMOVEDIR : FILE_ACTION_REMOVE;
 
 		/* Create a new entry for this file */
 		entry = pg_malloc(sizeof(file_entry_t));
@@ -322,6 +323,7 @@ process_block_change(ForkNumber forknum, RelFileNode rnode, BlockNumber blkno)
 
 			case FILE_ACTION_COPY:
 			case FILE_ACTION_REMOVE:
+			case FILE_ACTION_REMOVEDIR:
 				return;
 
 			case FILE_ACTION_CREATEDIR:
@@ -358,6 +360,8 @@ action_to_str(file_action_t action)
 			return "COPY_TAIL";
 		case FILE_ACTION_CREATEDIR:
 			return "CREATEDIR";
+		case FILE_ACTION_REMOVEDIR:
+			return "REMOVEDIR";
 
 		default:
 			return "unknown";

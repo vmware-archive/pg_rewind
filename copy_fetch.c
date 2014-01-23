@@ -313,6 +313,10 @@ copy_executeFileMap(filemap_t *map)
 			case FILE_ACTION_CREATEDIR:
 				create_target_dir(entry->path);
 				break;
+
+			case FILE_ACTION_REMOVEDIR:
+				remove_target_dir(entry->path);
+				break;
 		}
 	}
 
@@ -372,6 +376,25 @@ create_target_dir(const char *path)
 		exit(1);
 	}
 }
+
+
+void
+remove_target_dir(const char *path)
+{
+	char		dstpath[MAXPGPATH];
+
+	if (dry_run)
+		return;
+
+	snprintf(dstpath, sizeof(dstpath), "%s/%s", datadir_target, path);
+	if (rmdir(dstpath) != 0)
+	{
+		fprintf(stderr, "could not remove directory \"%s\": %s\n",
+				dstpath, strerror(errno));
+		exit(1);
+	}
+}
+
 
 static void
 execute_pagemap(datapagemap_t *pagemap, const char *path)
