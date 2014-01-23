@@ -339,6 +339,10 @@ libpq_executeFileMap(filemap_t *map)
 			case FILE_ACTION_CREATEDIR:
 				create_target_dir(entry->path);
 				break;
+
+			case FILE_ACTION_REMOVEDIR:
+				remove_target_dir(entry->path);
+				break;
 		}
 	}
 

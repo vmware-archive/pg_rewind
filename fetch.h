@@ -50,6 +50,7 @@ extern void traverse_datadir(const char *datadir, process_file_callback_t callba
 extern void remove_target_file(const char *path);
 extern void truncate_target_file(const char *path, off_t newsize);
 extern void create_target_dir(const char *path);
+extern void remove_target_dir(const char *path);
 extern void check_samefile(int fd1, int fd2);
 
 
