@@ -26,7 +26,7 @@ typedef enum
 	FILE_ACTION_TRUNCATE,	/* truncate local file to 'newsize' bytes */
 	FILE_ACTION_COPY_TAIL,	/* copy tail from 'oldsize' to 'newsize' */
 	FILE_ACTION_CREATEDIR,	/* create local dir */
-	FILE_ACTION_REMOVEDIR,	/* remove local dir */
+	FILE_ACTION_REMOVEDIR	/* remove local dir */
 } file_action_t;
 
 struct file_entry_t
