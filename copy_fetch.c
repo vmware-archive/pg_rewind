@@ -52,7 +52,7 @@ recurse_dir(const char *datadir, const char *path,
 	char		filepath[MAXPGPATH];
 
 	if (path)
-		snprintf(fulldirpath, MAXPGPATH, "%s/%s", datadir, path);
+		snprintf(fulldirpath, MAXPGPATH, "%s%s", datadir, path);
 	else
 		snprintf(fulldirpath, MAXPGPATH, "%s", datadir);
 
