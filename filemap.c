@@ -237,8 +237,6 @@ process_local_file(const char *path, size_t oldsize, bool isdir)
 	if (strcmp(path, "postmaster.pid") == 0 || strcmp(path, "postmaster.opts") == 0)
 		return;
 
-	if (strncmp(path, PG_AUTOCONF_FILENAME ".tmp", sizeof(PG_AUTOCONF_FILENAME) + 4) == 0)
-		return;
 
 	/* PG_VERSIONs should be identical, but avoid overwriting it for paranoia */
 	if (endswith(path, "PG_VERSION"))
@@ -407,7 +405,7 @@ isIgnorable(const char *path)
 	/* Compile the regexp if not compiled yet. */
 	if (!regexps_compiled)
 	{
-		const char *datasegment_regex_str = "(pg_x?log/.*|tmp)+$";
+		const char *datasegment_regex_str = "(pg_x?log/.*)+$";
 		rc = regcomp(&datasegment_regex, datasegment_regex_str, REG_NOSUB | REG_EXTENDED);
 		if (rc != 0)
 		{
