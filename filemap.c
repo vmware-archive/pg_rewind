@@ -20,6 +20,7 @@
 filemap_t *filemap = NULL;
 
 static bool isRelDataFile(const char *path);
+static bool isIgnorable(const char *path);
 static int path_cmp(const void *a, const void *b);
 
 
@@ -71,7 +72,6 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
 	file_entry_t *entry;
 
 	Assert(map->array == NULL);
-
 	/*
 	 * Ignore some special files
 	 */
@@ -242,8 +242,10 @@ process_local_file(const char *path, size_t oldsize, bool isdir)
 	/*
 	 * Ignore some special files
 	 */
-	if (strcmp(path, "postmaster.pid") == 0)
+	if (strcmp(path, "postmaster.pid") == 0 || strcmp(path, "postmaster.opts") == 0)
 		return;
+
+
 	/* PG_VERSIONs should be identical, but avoid overwriting it for paranoia */
 	if (endswith(path, "PG_VERSION"))
 		return;
@@ -252,6 +254,9 @@ process_local_file(const char *path, size_t oldsize, bool isdir)
 	key_ptr = &key;
 	exists = bsearch(&key_ptr, map->array, map->nfiles, sizeof(file_entry_t *),
 					 path_cmp) != NULL;
+
+	if (!exists && isIgnorable(path))
+		return;
 
 	/* Remove any file or folder that doesn't exist in the remote system. */
 	if (!exists)
@@ -393,6 +398,46 @@ print_filemap(void)
 				datapagemap_print(&entry->pagemap);
 		}
 	}
+}
+
+/*
+ * Can we ignore this file if there is a mismatch?
+ */
+static bool
+isIgnorable(const char *path)
+{
+	static bool	regexps_compiled = false;
+	static regex_t datasegment_regex;
+	int			rc;
+
+	/* Compile the regexp if not compiled yet. */
+	if (!regexps_compiled)
+	{
+		const char *datasegment_regex_str = "(pg_x?log/.*)+$";
+		rc = regcomp(&datasegment_regex, datasegment_regex_str, REG_NOSUB | REG_EXTENDED);
+		if (rc != 0)
+		{
+			char errmsg[100];
+			regerror(rc, &datasegment_regex, errmsg, sizeof(errmsg));
+			fprintf(stderr, "could not compile regular expression: %s\n",
+					errmsg);
+			exit(1);
+		}
+	}
+
+	rc = regexec(&datasegment_regex, path, 0, NULL, 0);
+	if (rc == 0)
+	{
+		return true;
+	}
+	else if (rc != REG_NOMATCH)
+	{
+		char errmsg[100];
+		regerror(rc, &datasegment_regex, errmsg, sizeof(errmsg));
+		fprintf(stderr, "could not execute regular expression: %s\n", errmsg);
+		exit(1);
+	}
+	return false;
 }
 
 /*
