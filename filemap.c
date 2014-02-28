@@ -15,6 +15,7 @@
 #include "filemap.h"
 #include "util.h"
 #include "pg_rewind.h"
+#include "storage/fd.h"
 
 filemap_t *filemap = NULL;
 
@@ -74,10 +75,18 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
 	/*
 	 * Ignore some special files
 	 */
-	if (strcmp(path, "postmaster.pid") == 0)
+	if (strcmp(path, "postmaster.pid") == 0 ||
+		strcmp(path, "postmaster.opts") == 0)
 		return;
+
 	/* PG_VERSIONs should be identical, but avoid overwriting it for paranoia */
 	if (endswith(path, "PG_VERSION"))
+		return;
+
+	/* Skip temporary files (.../pgsql_tmp/... and .../pgsql_tmp.*) */
+	if (strstr(path, "/" PG_TEMP_FILE_PREFIX) != NULL)
+		return;
+	if (strstr(path, "/" PG_TEMP_FILES_DIR "/") != NULL)
 		return;
 
 	/* Does the corresponding local file exist? */
