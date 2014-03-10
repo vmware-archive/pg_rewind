@@ -283,6 +283,7 @@ libpq_executeFileMap(filemap_t *map)
 	file_entry_t *entry;
 	const char *sql;
 	PGresult   *res;
+	int			i;
 
 	/*
 	 * First create a temporary table, and load it with the blocks that
@@ -308,8 +309,9 @@ libpq_executeFileMap(filemap_t *map)
 		exit(1);
 	}
 
-	for (entry = map->first; entry != NULL; entry = entry->next)
+	for (i = 0; i < map->narray; i++)
 	{
+		entry = map->array[i];
 		execute_pagemap(&entry->pagemap, entry->path);
 
 		switch (entry->action)

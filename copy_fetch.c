@@ -283,9 +283,11 @@ void
 copy_executeFileMap(filemap_t *map)
 {
 	file_entry_t *entry;
+	int			i;
 
-	for (entry = map->first; entry != NULL; entry = entry->next)
+	for (i = 0; i < map->narray; i++)
 	{
+		entry = map->array[i];
 		execute_pagemap(&entry->pagemap, entry->path);
 
 		switch (entry->action)

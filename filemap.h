@@ -16,16 +16,18 @@
  * which says what we are going to do with the file. For relation files,
  * there is also a page map, marking pages in the file that were changed
  * locally.
+ *
+ * The enum values are sorted in the order we want actions to be processed.
  */
 typedef enum
 {
+	FILE_ACTION_CREATEDIR,	/* create local dir */
+	FILE_ACTION_COPY,		/* copy whole file, overwriting if exists */
+	FILE_ACTION_COPY_TAIL,	/* copy tail from 'oldsize' to 'newsize' */
 	FILE_ACTION_NONE,		/* no action (we might still copy modified blocks
 							 * based on the parsed WAL) */
-	FILE_ACTION_COPY,		/* copy whole file, overwriting if exists */
-	FILE_ACTION_REMOVE,		/* remove local file */
 	FILE_ACTION_TRUNCATE,	/* truncate local file to 'newsize' bytes */
-	FILE_ACTION_COPY_TAIL,	/* copy tail from 'oldsize' to 'newsize' */
-	FILE_ACTION_CREATEDIR,	/* create local dir */
+	FILE_ACTION_REMOVE,		/* remove local file */
 	FILE_ACTION_REMOVEDIR	/* remove local dir */
 } file_action_t;
 
@@ -48,16 +50,23 @@ typedef struct file_entry_t file_entry_t;
 
 struct filemap_t
 {
+	/*
+	 * New entries are accumulated to a linked list, in process_remote_file
+	 * and process_local_file.
+	 */
 	file_entry_t *first;
 	file_entry_t *last;
+	int			nlist;
 
 	/*
-	 * When array is NULL, nfiles is the number of entries in the linked list.
-	 * Otherwise nfiles is the number of entries in the array, but there can
-	 * be more entries in the linked list.
+	 * After processing all the remote files, the entries in the linked list
+	 * are moved to this array. After processing local file, too, all the
+	 * local entries are added to the array by filemap_finalize, and sorted
+	 * in the final order. After filemap_finalize, all the entries are in
+	 * the array, and the linked list is empty.
 	 */
 	file_entry_t **array;
-	int			nfiles;
+	int			narray;
 };
 
 typedef struct filemap_t filemap_t;
@@ -72,5 +81,6 @@ extern void print_filemap(void);
 extern void process_remote_file(const char *path, size_t newsize, bool isdir);
 extern void process_local_file(const char *path, size_t newsize, bool isdir);
 extern void process_block_change(ForkNumber forknum, RelFileNode rnode, BlockNumber blkno);
+extern void filemap_finalize(void);
 
 #endif   /* FILEMAP_H */

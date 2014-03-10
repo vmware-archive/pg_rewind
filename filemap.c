@@ -21,6 +21,8 @@ filemap_t *filemap = NULL;
 
 static bool isRelDataFile(const char *path);
 static int path_cmp(const void *a, const void *b);
+static int final_filemap_cmp(const void *a, const void *b);
+static void filemap_list_to_array(void);
 
 
 /*****
@@ -35,8 +37,9 @@ filemap_create(void)
 {
 	filemap_t *map = pg_malloc(sizeof(filemap_t));
 	map->first = map->last = NULL;
+	map->nlist = 0;
 	map->array = NULL;
-	map->nfiles = 0;
+	map->narray = 0;
 
 	Assert(filemap == NULL);
 	filemap = map;
@@ -199,7 +202,7 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
 	}
 	else
 		map->first = map->last = entry;
-	map->nfiles++;
+	map->nlist++;
 }
 
 
@@ -219,24 +222,18 @@ process_local_file(const char *path, size_t oldsize, bool isdir)
 	file_action_t action;
 	file_entry_t *entry;
 
-	if (map->nfiles == 0)
-	{
-		/* should not happen */
-		fprintf(stderr, "remote file list is empty\n");
-		exit(1);
-	}
 	if (map->array == NULL)
 	{
 		/* on first call, initialize lookup array */
-		int i;
-		map->array = pg_malloc(map->nfiles * sizeof(file_entry_t));
+		if (map->nlist == 0)
+		{
+			/* should not happen */
+			fprintf(stderr, "remote file list is empty\n");
+			exit(1);
+		}
 
-		i = 0;
-		for (entry = map->first; entry != NULL; entry = entry->next)
-			map->array[i++] = entry;
-		Assert (i == map->nfiles);
-
-		qsort(map->array, map->nfiles, sizeof(file_entry_t *), path_cmp);
+		filemap_list_to_array();
+		qsort(map->array, map->narray, sizeof(file_entry_t *), path_cmp);
 	}
 
 	/*
@@ -250,7 +247,7 @@ process_local_file(const char *path, size_t oldsize, bool isdir)
 
 	key.path = (char *) path;
 	key_ptr = &key;
-	exists = bsearch(&key_ptr, map->array, map->nfiles, sizeof(file_entry_t *),
+	exists = bsearch(&key_ptr, map->array, map->narray, sizeof(file_entry_t *),
 					 path_cmp) != NULL;
 
 	/* Remove any file or folder that doesn't exist in the remote system. */
@@ -270,8 +267,12 @@ process_local_file(const char *path, size_t oldsize, bool isdir)
 		entry->pagemap.bitmap = NULL;
 		entry->pagemap.bitmapsize = 0;
 
-		map->last->next = entry;
+		if (map->last == NULL)
+			map->first = entry;
+		else
+			map->last->next = entry;
 		map->last = entry;
+		map->nlist++;
 	}
 	else
 	{
@@ -283,7 +284,7 @@ process_local_file(const char *path, size_t oldsize, bool isdir)
 }
 
 /*
- * This callback  gets called while we read the old WAL, for every block that
+ * This callback gets called while we read the old WAL, for every block that
  * have changed in the local system. It makes note of all the changed blocks
  * in the pagemap of the file.
  */
@@ -309,7 +310,7 @@ process_block_change(ForkNumber forknum, RelFileNode rnode, BlockNumber blkno)
 	key_ptr = &key;
 
 	{
-		file_entry_t **e = bsearch(&key_ptr, map->array, map->nfiles,
+		file_entry_t **e = bsearch(&key_ptr, map->array, map->narray,
 								   sizeof(file_entry_t *), path_cmp);
 		if (e)
 			entry = *e;
@@ -351,6 +352,43 @@ process_block_change(ForkNumber forknum, RelFileNode rnode, BlockNumber blkno)
 	}
 }
 
+/*
+ * Convert the linked list of entries in filemap->first/last to the array,
+ * filemap->array.
+ */
+static void
+filemap_list_to_array(void)
+{
+	int			narray;
+	file_entry_t *entry,
+				*next;
+
+	if (filemap->array == NULL)
+		filemap->array = pg_malloc(filemap->nlist * sizeof(file_entry_t));
+	else
+		filemap->array = pg_realloc(filemap->array,
+									(filemap->nlist + filemap->narray) * sizeof(file_entry_t));
+
+	narray = filemap->narray;
+	for (entry = filemap->first; entry != NULL; entry = next)
+	{
+		filemap->array[narray++] = entry;
+		next = entry->next;
+		entry->next = NULL;
+	}
+	Assert (narray == filemap->nlist + filemap->narray);
+	filemap->narray = narray;
+	filemap->nlist = 0;
+	filemap->first = filemap->last = NULL;
+}
+
+void
+filemap_finalize(void)
+{
+	filemap_list_to_array();
+	qsort(filemap->array, filemap->narray, sizeof(file_entry_t *),
+		  final_filemap_cmp);
+}
 
 static const char *
 action_to_str(file_action_t action)
@@ -381,9 +419,11 @@ void
 print_filemap(void)
 {
 	file_entry_t *entry;
+	int			i;
 
-	for (entry = filemap->first; entry != NULL; entry = entry->next)
+	for (i = 0; i < filemap->narray; i++)
 	{
+		entry = filemap->array[i];
 		if (entry->action != FILE_ACTION_NONE ||
 			entry->pagemap.bitmapsize > 0)
 		{
@@ -442,5 +482,28 @@ path_cmp(const void *a, const void *b)
 {
 	file_entry_t *fa = *((file_entry_t **) a);
 	file_entry_t *fb = *((file_entry_t **) b);
+	return strcmp(fa->path, fb->path);
+}
+
+/*
+ * In the final stage, the filemap is sorted so that removals come last.
+ * From disk space usage point of view, it would be better to do removals
+ * first, but for now, safety first. If a whole directory is deleted, all
+ * files and subdirectories inside it need to removed first. On creation,
+ * parent directory needs to be created before files and directories inside
+ * it. To achieve that, the file_action_t enum is ordered so that we can
+ * just sort on that first.
+ */
+static int
+final_filemap_cmp(const void *a, const void *b)
+{
+	file_entry_t *fa = *((file_entry_t **) a);
+	file_entry_t *fb = *((file_entry_t **) b);
+
+	if (fa->action > fb->action)
+		return 1;
+	if (fa->action < fb->action)
+		return -1;
+
 	return strcmp(fa->path, fb->path);
 }
