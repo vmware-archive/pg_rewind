@@ -11,7 +11,7 @@ OBJS	= pg_rewind.o parsexlog.o xlogreader.o util.o datapagemap.o timeline.o \
 	fetch.o copy_fetch.o libpq_fetch.o filemap.o
 
 REGRESS = basictest extrafiles databases
-EXTRA_REGRESS_OPTS=--use-existing --launcher=./launcher
+REGRESS_OPTS=--use-existing --launcher=./launcher
 
 PG_CPPFLAGS = -I$(libpq_srcdir)
 PG_LIBS = $(libpq_pgport)
