@@ -10,7 +10,7 @@ PROGRAM = pg_rewind
 OBJS	= pg_rewind.o parsexlog.o xlogreader.o util.o datapagemap.o timeline.o \
 	fetch.o copy_fetch.o libpq_fetch.o filemap.o
 
-REGRESS = pg_rewind_local pg_rewind_remote
+REGRESS = basictest
 REGRESS_OPTS=--use-existing --launcher=./launcher
 
 PG_CPPFLAGS = -I$(libpq_srcdir)
@@ -24,7 +24,7 @@ all: pg_rewind checksrcdir
 
 # This rule's only purpose is to give the user instructions on how to pass
 # the path to PostgreSQL source tree to the makefile.
-.PHONY: checksrcdir
+.PHONY: checksrcdir check-local check-remote check-all
 checksrcdir:
 ifdef USE_PGXS
 ifndef top_srcdir
@@ -54,3 +54,12 @@ endif
 xlogreader.c: % : $(top_srcdir)/src/backend/access/transam/%
 	rm -f $@ && $(LN_S) $< .
 
+check-local:
+	echo "Running tests against local data directory, in copy-mode"
+	TEST_SUITE="local" $(MAKE) installcheck
+
+check-remote:
+	echo "Running tests against a running standby, via libpq"
+	TEST_SUITE="remote" $(MAKE) installcheck
+
+check-both: check-local check-remote

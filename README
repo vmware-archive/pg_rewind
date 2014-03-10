@@ -53,14 +53,16 @@ missing files manually from the WAL archive to the pg_xlog directory.
 Regression tests
 ----------------
 
-The test suite of pg_rewind can be launched simply, similarly to what vanilla
-PostgreSQL extensions do.
+The regression tests can be run separately against, using the libpq or local
+method to copy the files. For local mode, the makefile target is "check-local",
+and for libpq mode, "check-remote". The target check-both runs the tests in
+both modes. For example:
 
-1) Copy code inside PostgreSQL code tree as contrib/pg_rewind:
-    make check
+1) Copy code inside PostgreSQL code tree as contrib/pg_rewind, and run:
+    make check-both
 
-2) Manage it as an independent module:
-    make installcheck USE_PGXS=1
+2) As an independent module, outside the PostgreSQL source tree:
+    make check-both USE_PGXS=1
 
 Theory of operation
 -------------------
