@@ -389,4 +389,5 @@ execute_pagemap(datapagemap_t *pagemap, const char *path)
 
 		copy_file_range(path, offset, offset + BLCKSZ);
 	}
+	free(iter);
 }
