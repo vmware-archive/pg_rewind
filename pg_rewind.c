@@ -240,6 +240,9 @@ main(int argc, char **argv)
 		   (uint32) (chkptrec >> 32), (uint32) chkptrec,
 		   chkpttli);
 
+	/*
+	 * Build the filemap, by comparing the remote and local data directories
+	 */
 	(void) filemap_create();
 	fetchRemoteFileList();
 	traverse_datadir(datadir_target, &process_local_file);
@@ -250,6 +253,8 @@ main(int argc, char **argv)
 	 * after the fork.
 	 */
 	extractPageMap(datadir_target, chkptrec, lastcommontli);
+
+	filemap_finalize();
 
 	/* XXX: this is probably too verbose even in verbose mode */
 	if (verbose)

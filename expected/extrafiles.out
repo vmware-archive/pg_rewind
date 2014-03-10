@@ -1,0 +1,11 @@
+Master initialized and running.
+Standby initialized and running.
+Standby promoted.
+Running pg_rewind...
+Old master restarted after rewind.
+tst_both_dir
+tst_both_dir/both_file1
+tst_both_dir/both_file2
+tst_standby_dir
+tst_standby_dir/standby_file1
+tst_standby_dir/standby_file2
