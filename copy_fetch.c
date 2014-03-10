@@ -412,6 +412,7 @@ execute_pagemap(datapagemap_t *pagemap, const char *path)
 		copy_file_range(path, offset, offset + BLCKSZ, false);
 		/* Ok, this block has now been copied from new data dir to old */
 	}
+	free(iter);
 }
 
 /*
