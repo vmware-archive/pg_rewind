@@ -328,12 +328,12 @@ void
 remove_target_file(const char *path)
 {
 	char		dstpath[MAXPGPATH];
-
+	struct stat	fst;
 	if (dry_run)
 		return;
 
 	snprintf(dstpath, sizeof(dstpath), "%s/%s", datadir_target, path);
-	if (unlink(dstpath) != 0)
+	if ((lstat(dstpath, &fst) > 0) && unlink(dstpath) != 0)
 	{
 		fprintf(stderr, "could not remove file \"%s\": %s\n",
 				dstpath, strerror(errno));
@@ -346,12 +346,12 @@ void
 truncate_target_file(const char *path, off_t newsize)
 {
 	char		dstpath[MAXPGPATH];
-
+	struct stat	fst;
 	if (dry_run)
 		return;
 
 	snprintf(dstpath, sizeof(dstpath), "%s/%s", datadir_target, path);
-	if (truncate(dstpath, newsize) != 0)
+	if ((lstat(dstpath, &fst) > 0) && truncate(dstpath, newsize) != 0)
 	{
 		fprintf(stderr, "could not truncate file \"%s\" to %u bytes: %s\n",
 				dstpath, (unsigned int) newsize, strerror(errno));
@@ -382,20 +382,83 @@ void
 remove_target_dir(const char *path)
 {
 	char		dstpath[MAXPGPATH];
+	struct stat	fst;
 
 	if (dry_run)
 		return;
 
 	snprintf(dstpath, sizeof(dstpath), "%s/%s", datadir_target, path);
-	if (rmdir(dstpath) != 0)
-	{
-		fprintf(stderr, "could not remove directory \"%s\": %s\n",
+		if (remove_dir(dstpath) != 0 && lstat(dstpath, &fst) < 0)
+		{
+			fprintf(stderr, "could not remove directory \"%s\": %s\n",
 				dstpath, strerror(errno));
-		exit(1);
-	}
+			exit(1);
+		}
 }
 
+/* Recursively remove non empty directory */
 
+int
+remove_dir(const char *path)
+{
+        DIR     *dir = opendir(path);
+        size_t  path_len = strlen(path);
+        int     r = -1;
+
+        if (dir)
+        {
+                struct  dirent *dptr;
+                r = 0;
+
+                while (!r && (dptr = readdir(dir)))
+                {
+                        int     r2 = -1;
+                        char    *buffer;
+                        size_t  len;
+
+                        /* Skip "." and ".." */
+                        if (!strcmp(dptr->d_name, ".") || !strcmp(dptr->d_name, ".."))
+                        {
+                                continue;
+                        }
+
+                        len = path_len + strlen(dptr->d_name) + 2;
+                        buffer = malloc(len);
+
+                        if (buffer)
+                        {
+                                struct stat     statbuf;
+
+                                snprintf(buffer, len, "%s/%s", path, dptr->d_name);
+
+                                if (!stat(buffer, &statbuf))
+                                {
+                                        if (S_ISDIR(statbuf.st_mode))
+                                        {
+                                                r2 = remove_dir(buffer);
+                                        }
+                                        else
+                                        {
+                                                r2 = unlink(buffer);
+                                        }
+                                }
+
+                                free(buffer);
+                        }
+
+                        r = r2;
+                }
+
+        closedir(dir);
+        }
+
+        if (!r)
+        {
+                r = rmdir(path);
+        }
+
+        return r;
+}
 static void
 execute_pagemap(datapagemap_t *pagemap, const char *path)
 {
