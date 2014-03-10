@@ -4,77 +4,31 @@
 #
 # Test driver for pg_rewind. This test script initdb's and configures a
 # cluster and creates a table with some data in it. Then, it makes a
-# standby of it with pg_basebackup, and promotes the standby. Some more
-# rows are inserted in both the old and new cluster.
+# standby of it with pg_basebackup, and promotes the standby.
 #
 # The result is two clusters, so that the old "master" cluster can be
 # resynchronized with pg_rewind to catch up with the new "standby" cluster.
 # This test can be run with either a local data folder or a remote
 # connection as source.
-
-# Exit on error
-set -e
-
-mkdir -p "regress_log"
-log_path="regress_log/pg_rewind_log_"`date +%F-%s`
-: ${MAKE=make}
-
-# Guard against parallel make issues (see comments in pg_regress.c)
-unset MAKEFLAGS
-unset MAKELEVEL
-
-# Check at least that the option given is suited
-if [ "$1" = '--remote' ]; then
-	echo "Running tests with libpq connection as source" >>$log_path 2>&1
-	TEST_SUITE="remote"
-elif [ "$1" = '--local' ]; then
-	echo "Running tests with local data folder as source" >>$log_path 2>&1
-	TEST_SUITE="local"
-else
-	echo "Option $1 is not valid"
-	exit 1
-fi
-
-# Set listen_addresses desirably
-testhost=`uname -s`
-case $testhost in
-	MINGW*) LISTEN_ADDRESSES="localhost" ;;
-	*)      LISTEN_ADDRESSES="" ;;
-esac
-
-# Adjust these paths for your environment
-TESTROOT=$PWD/tmp_check
-TEST_MASTER=$TESTROOT/data_master
-TEST_STANDBY=$TESTROOT/data_standby
-
-# Create the root folder for test data
-mkdir -p $TESTROOT
-
-# Clear out any environment vars that might cause libpq to connect to
-# the wrong postmaster (cf pg_regress.c)
 #
-# Some shells, such as NetBSD's, return non-zero from unset if the variable
-# is already unset. Since we are operating under 'set -e', this causes the
-# script to fail. To guard against this, set them all to an empty string first.
-PGDATABASE="";        unset PGDATABASE
-PGUSER="";            unset PGUSER
-PGSERVICE="";         unset PGSERVICE
-PGSSLMODE=""          unset PGSSLMODE
-PGREQUIRESSL="";      unset PGREQUIRESSL
-PGCONNECT_TIMEOUT=""; unset PGCONNECT_TIMEOUT
-PGHOST=""             unset PGHOST
-PGHOSTADDR="";        unset PGHOSTADDR
-
-# Define non conflicting ports for both nodes, this could be a bit
-# smarter with for example dynamic port recognition using psql but
-# this will make it for now.
-PG_VERSION_NUM=90401
-PORT_MASTER=`expr $PG_VERSION_NUM % 16384 + 49152`
-PORT_STANDBY=`expr $PORT_MASTER + 1`
+# Before running this script, the calling script should've included
+# config_test.sh, and defined four functions to define the test case:
+#
+#  before_standby  - runs after initializing the master, before creating the
+#                    standby
+#  standby_following_master - runs after standby has been created and started
+#  after_promotion - runs after standby has been promoted, but old master is
+#                    still running
+#  after_rewind    - runs after pg_rewind and after restarting the rewound
+#                    old master
+#
+# In those functions, the test script can use $MASTER_PSQL and $STANDBY_PSQL
+# to run psql against the master and standby servers, to cause the servers
+# to diverge.
 
 # Initialize master, data checksums are mandatory
 rm -rf $TEST_MASTER
-initdb -D $TEST_MASTER >>$log_path 2>&1
+initdb -N -A trust -D $TEST_MASTER >>$log_path
 
 # Custom parameters for master's postgresql.conf
 cat >> $TEST_MASTER/postgresql.conf <<EOF
@@ -101,10 +55,10 @@ EOF
 
 pg_ctl -w -D $TEST_MASTER start >>$log_path 2>&1
 
-# 1. Do some inserts in master
-psql --no-psqlrc -p $PORT_MASTER -c "CREATE TABLE tbl1 (d text);" postgres >>$log_path 2>&1
-psql --no-psqlrc -p $PORT_MASTER -c "INSERT INTO tbl1 VALUES ('in master');" postgres >>$log_path 2>&1
-psql --no-psqlrc -p $PORT_MASTER -c "CHECKPOINT; " postgres >>$log_path 2>&1
+#### Now run the test-specific parts to initialize the master before setting
+# up standby
+echo "Master initialized and running."
+before_standby
 
 # Set up standby with necessary parameter
 rm -rf $TEST_STANDBY
@@ -122,26 +76,23 @@ EOF
 # Start standby
 pg_ctl -w -D $TEST_STANDBY start >>$log_path 2>&1
 
-# Insert additional data on master and be sure that the standby has
-# caught up.
-psql --no-psqlrc -p $PORT_MASTER \
-	 -c "INSERT INTO tbl1 values ('in master, before promotion');" \
-	 postgres >>$log_path 2>&1
+#### Now run the test-specific parts to run after standby has been started
+# up standby
+echo "Standby initialized and running."
+standby_following_master
+
+# sleep a bit to make sure the standby has caught up.
 sleep 1
 
 # Now promote slave and insert some new data on master, this will put
 # the master out-of-sync with the standby.
 pg_ctl -w -D $TEST_STANDBY promote >>$log_path 2>&1
 sleep 1
-psql --no-psqlrc -p $PORT_MASTER \
-	 -c "INSERT INTO tbl1 VALUES ('in master, after promotion');" \
-	 postgres >>$log_path 2>&1
 
-# And complete it with some data on the standby, now both node have
-# completely different data.
-psql --no-psqlrc -p $PORT_STANDBY \
-	 -c "INSERT INTO tbl1 VALUES ('in standby, after promotion');" \
-	 postgres >>$log_path 2>&1
+#### Now run the test-specific parts to run after promotion
+echo "Standby promoted."
+after_promotion
+
 
 # Stop the master and be ready to perform the rewind
 pg_ctl -w -D $TEST_MASTER stop -m fast >>$log_path 2>&1
@@ -150,13 +101,14 @@ pg_ctl -w -D $TEST_MASTER stop -m fast >>$log_path 2>&1
 # We now have a very simple scenario with a few diverged WAL record.
 # The real testing begins really now with a bifurcation of the possible
 # scenarios that pg_rewind supports.
-sleep 1
 
 # Keep a temporary postgresql.conf for master node or it would be
 # overwritten during the rewind.
 cp $TEST_MASTER/postgresql.conf $TESTROOT/master-postgresql.conf.tmp
 
-# Now launch the test suite
+# Now run pg_rewind
+echo "Running pg_rewind..."
+echo "Running pg_rewind..." >> $log_path
 if [ $TEST_SUITE == "local" ]; then
 	# Do rewind using a local pgdata as source
 	./pg_rewind \
@@ -179,12 +131,11 @@ mv $TESTROOT/master-postgresql.conf.tmp $TEST_MASTER/postgresql.conf
 # Restart the master to check that rewind went correctly
 pg_ctl -w -D $TEST_MASTER start >>$log_path 2>&1
 
-# Compare results generated by querying master
-psql --no-psqlrc -p $PORT_MASTER -c "SELECT * from tbl1" postgres
+
+#### Now run the test-specific parts to check the result
+echo "Old master restarted after rewind."
+after_rewind
 
 # Stop remaining servers
 pg_ctl stop -D $TEST_MASTER -m fast -w >>$log_path 2>&1
 pg_ctl stop -D $TEST_STANDBY -m fast -w >>$log_path 2>&1
-
-# Remove test data
-rm -rf $TEST_ROOT
