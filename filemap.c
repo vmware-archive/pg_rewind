@@ -76,17 +76,17 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
 	Assert(map->array == NULL);
 
 	/*
-	 * Ignore some special files
+	 * Completely ignore some special files in source and destination.
 	 */
 	if (strcmp(path, "postmaster.pid") == 0 ||
 		strcmp(path, "postmaster.opts") == 0)
 		return;
 
-	/* PG_VERSIONs should be identical, but avoid overwriting it for paranoia */
-	if (endswith(path, "PG_VERSION"))
-		return;
-
-	/* Skip temporary files (.../pgsql_tmp/... and .../pgsql_tmp.*) */
+	/*
+	 * Skip temporary files, .../pgsql_tmp/... and .../pgsql_tmp.* in source.
+	 * This has the effect that all temporary files in the destination will
+	 * be removed.
+	 */
 	if (strstr(path, "/" PG_TEMP_FILE_PREFIX) != NULL)
 		return;
 	if (strstr(path, "/" PG_TEMP_FILES_DIR "/") != NULL)
@@ -147,9 +147,20 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
 		/*
 		 * File exists in source, but not in target. Or it's a non-data file
 		 * that we have no special processing for. Copy it in toto.
+		 *
+		 * An exception: PG_VERSIONs should be identical, but avoid
+		 * overwriting it for paranoia.
 		 */
-		action = FILE_ACTION_COPY;
-		oldsize = 0;
+		if (endswith(path, "PG_VERSION"))
+		{
+			action = FILE_ACTION_NONE;
+			oldsize = statbuf.st_size;
+		}
+		else
+		{
+			action = FILE_ACTION_COPY;
+			oldsize = 0;
+		}
 	}
 	else
 	{
@@ -237,12 +248,10 @@ process_local_file(const char *path, size_t oldsize, bool isdir)
 	}
 
 	/*
-	 * Ignore some special files
+	 * Completely ignore some special files
 	 */
-	if (strcmp(path, "postmaster.pid") == 0)
-		return;
-	/* PG_VERSIONs should be identical, but avoid overwriting it for paranoia */
-	if (endswith(path, "PG_VERSION"))
+	if (strcmp(path, "postmaster.pid") == 0 ||
+		strcmp(path, "postmaster.opts") == 0)
 		return;
 
 	key.path = (char *) path;
