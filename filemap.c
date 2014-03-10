@@ -433,6 +433,7 @@ print_filemap(void)
 				datapagemap_print(&entry->pagemap);
 		}
 	}
+	fflush(stdout);
 }
 
 /*
