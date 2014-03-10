@@ -136,21 +136,32 @@ readOneRecord(const char *datadir, XLogRecPtr ptr, TimeLineID tli)
  * Find the previous checkpoint preceding given WAL position.
  */
 void
-findLastCheckpoint(const char *datadir, XLogRecPtr searchptr, TimeLineID tli,
+findLastCheckpoint(const char *datadir, XLogRecPtr forkptr, TimeLineID tli,
 				   XLogRecPtr *lastchkptrec, TimeLineID *lastchkpttli,
 				   XLogRecPtr *lastchkptredo)
 {
 	/* Walk backwards, starting from the given record */
 	XLogRecord *record;
-	XLogRecPtr forkptr = searchptr;
+	XLogRecPtr searchptr;
 	XLogReaderState *xlogreader;
 	char	   *errormsg;
 	XLogPageReadPrivate private;
+
+
+	/*
+	 * The given fork pointer points to the end of the last common record,
+	 * which is not necessarily the beginning of the next record, if the
+	 * previous record happens to end at a page boundary. Skip over the
+	 * page header in that case to find the next record.
+	 */
+	if (forkptr % XLOG_BLCKSZ == 0)
+		forkptr += (forkptr % XLogSegSize == 0) ? SizeOfXLogLongPHD : SizeOfXLogShortPHD;
 
 	private.datadir = datadir;
 	private.tli = tli;
 	xlogreader = XLogReaderAllocate(&SimpleXLogPageRead, &private);
 
+	searchptr = forkptr;
 	for (;;)
 	{
 		uint8		info;
@@ -159,7 +170,7 @@ findLastCheckpoint(const char *datadir, XLogRecPtr searchptr, TimeLineID tli,
 
 		if (record == NULL)
 		{
-			fprintf(stderr, "could not previous WAL record at %X/%X: %s\n",
+			fprintf(stderr, "could not find previous WAL record at %X/%X: %s\n",
 					(uint32) (searchptr >> 32),
 					(uint32) (searchptr), errormsg);
 			exit(1);
