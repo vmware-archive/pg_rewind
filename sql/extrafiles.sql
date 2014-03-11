@@ -18,6 +18,8 @@ function before_standby
   mkdir $TEST_MASTER/tst_both_dir
   echo "in both1" > $TEST_MASTER/tst_both_dir/both_file1
   echo "in both2" > $TEST_MASTER/tst_both_dir/both_file2
+  mkdir $TEST_MASTER/tst_both_dir/both_subdir/
+  echo "in both3" > $TEST_MASTER/tst_both_dir/both_subdir/both_file3
 }
 
 # Create subdirs that will be present only in one data dir.
@@ -26,9 +28,13 @@ function standby_following_master
   mkdir $TEST_STANDBY/tst_standby_dir
   echo "in standby1" > $TEST_STANDBY/tst_standby_dir/standby_file1
   echo "in standby2" > $TEST_STANDBY/tst_standby_dir/standby_file2
+  mkdir $TEST_STANDBY/tst_standby_dir/standby_subdir/
+  echo "in standby3" > $TEST_STANDBY/tst_standby_dir/standby_subdir/standby_file3
   mkdir $TEST_MASTER/tst_master_dir
   echo "in master1" > $TEST_MASTER/tst_master_dir/master_file1
   echo "in master2" > $TEST_MASTER/tst_master_dir/master_file2
+  mkdir $TEST_MASTER/tst_master_dir/master_subdir/
+  echo "in master3" > $TEST_MASTER/tst_master_dir/master_subdir/master_file3
 }
 
 function after_promotion

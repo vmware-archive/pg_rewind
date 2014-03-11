@@ -502,7 +502,8 @@ path_cmp(const void *a, const void *b)
  * files and subdirectories inside it need to removed first. On creation,
  * parent directory needs to be created before files and directories inside
  * it. To achieve that, the file_action_t enum is ordered so that we can
- * just sort on that first.
+ * just sort on that first. Furthermore, sort REMOVE_DIR entries in reverse
+ * path order, so that "foo/bar" subdirectory is removed before "foo".
  */
 static int
 final_filemap_cmp(const void *a, const void *b)
@@ -515,5 +516,8 @@ final_filemap_cmp(const void *a, const void *b)
 	if (fa->action < fb->action)
 		return -1;
 
-	return strcmp(fa->path, fb->path);
+	if (fa->action == FILE_ACTION_REMOVEDIR)
+		return -strcmp(fa->path, fb->path);
+	else
+		return strcmp(fa->path, fb->path);
 }
