@@ -60,19 +60,26 @@ libpqProcessFileList(void)
 
 	sql =
 		"-- Create a recursive directory listing of the whole data directory\n"
-		"with recursive files (path, size, isdir) as (\n"
-		"  select filename as path, size, isdir\n"
-		"  from (select pg_ls_dir('.') as filename) as filenames,\n"
-		"       pg_stat_file(filename) as this\n"
+		"with recursive files (path, size, isdir, tblspcoid, tblspc_location) as (\n"
+		"  select filename as path, size, isdir, tblspcoid, tblspc_location from\n"
+		"  (select pg_ls_dir('.') as filename) as filenames LEFT OUTER JOIN\n"
+		"  (SELECT oid as tblspcoid, (SELECT pg_tablespace_location AS tblspc_location\n"
+		"  FROM pg_tablespace_location(oid)) FROM pg_tablespace) as tblspc\n"
+		"  ON filename = tblspcoid::text,\n"
+		"        pg_stat_file(filename) as this\n"
 		"  union all\n"
-		"  select parent.path || '/' || filename, this.size, this.isdir\n"
+		"  select parent.path || '/' || filename, this.size, this.isdir,\n"
+		"  tblspc.tblspcoid, tblspc.tblspc_location\n"
 		"  from files as parent,\n"
-		"       pg_ls_dir(parent.path) as filename,\n"
+		"       pg_ls_dir(parent.path) as filename LEFT OUTER JOIN\n"
+		"       (SELECT oid as tblspcoid, (SELECT pg_tablespace_location\n"
+		"       AS tblspc_location FROM pg_tablespace_location(oid)) FROM pg_tablespace) as tblspc\n"
+		"       ON filename = tblspc.tblspcoid::text,\n"
 		"       pg_stat_file(parent.path || '/' || filename) as this\n"
 		"       where parent.isdir = 't'\n"
 		")\n"
 		"-- Using the cte, fetch all files in chunks.\n"
-		"select path, size, isdir from files\n";
+		"select path, size, isdir, tblspcoid, tblspc_location from files\n";
 
 	res = PQexec(conn, sql);
 
@@ -84,7 +91,7 @@ libpqProcessFileList(void)
 	}
 
 	/* sanity check the result set */
-	if (!(PQnfields(res) == 3))
+	if (!(PQnfields(res) == 5))
 	{
 		fprintf(stderr, "unexpected result set while fetching file list\n");
 		exit(1);
@@ -96,8 +103,8 @@ libpqProcessFileList(void)
 		char *path = PQgetvalue(res, i, 0);
 		int filesize = atoi(PQgetvalue(res, i, 1));
 		bool isdir = (strcmp(PQgetvalue(res, i, 2), "t") == 0);
-
-		process_remote_file(path, filesize, isdir);
+		char *tblspc_location = PQgetvalue(res, i, 4);
+		process_remote_file(path, filesize, isdir, tblspc_location);
 	}
 }
 
@@ -345,6 +352,15 @@ libpq_executeFileMap(filemap_t *map)
 			case FILE_ACTION_REMOVEDIR:
 				remove_target_dir(entry->path);
 				break;
+
+			case FILE_ACTION_CREATESYMLINK:
+				create_target_symlink(entry->path, entry->tblspc_location);
+				break;
+
+			case FILE_ACTION_REMOVESYMLINK:
+				remove_target_symlink(entry->path);
+				break;
+
 		}
 	}
 

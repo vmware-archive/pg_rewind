@@ -50,6 +50,9 @@ recurse_dir(const char *datadir, const char *path,
 	struct dirent *xlde;
 	char		fulldirpath[MAXPGPATH];
 	char		filepath[MAXPGPATH];
+	char		buffer[MAXPGPATH];
+	char		*temppath;
+	int		len = 0;
 
 	if (path)
 		snprintf(fulldirpath, MAXPGPATH, "%s/%s", datadir, path);
@@ -74,6 +77,29 @@ recurse_dir(const char *datadir, const char *path,
 
 		snprintf(filepath, MAXPGPATH, "%s/%s", fulldirpath, xlde->d_name);
 
+		/* Initialize buffer to empty string */
+		strcpy(buffer, "");
+
+		/* Quick exit if we are rewinding tablespace in source directory mode */
+		if ((len = (readlink(filepath, buffer, sizeof(buffer)-1))) != -1 && datadir_source != NULL)
+		{
+			if ((temppath = strstr(filepath,"pg_tblspc")) != NULL)
+			{
+				temppath = strstr(temppath,"/");
+				temppath++;
+				if (strstr(temppath,"/") == NULL)
+				{
+					printf("\n Could not rewind tablespace in source directory mode");
+					exit(0);
+				}
+			}
+		}
+
+		if(len != 0)
+			buffer[len] = '\0';
+		else
+			strcpy(buffer,"");
+
 		if (lstat(filepath, &fst) < 0)
 		{
 			fprintf(stderr, "warning: could not stat file \"%s\": %s",
@@ -93,14 +119,14 @@ recurse_dir(const char *datadir, const char *path,
 		else
 			snprintf(filepath, MAXPGPATH, "%s", xlde->d_name);
 
-		if (S_ISDIR(fst.st_mode))
+		if (S_ISDIR(fst.st_mode) || S_ISLNK(fst.st_mode))
 		{
-			callback(filepath, 0, true);
+			callback(filepath, 0, true, buffer);
 			/* recurse to handle subdirectories */
 			recurse_dir(datadir, filepath, callback);
 		}
 		else if (S_ISREG(fst.st_mode))
-			callback(filepath, fst.st_size, false);
+			callback(filepath, fst.st_size, false, buffer);
 	}
 	closedir(xldir);
 }
@@ -319,6 +345,15 @@ copy_executeFileMap(filemap_t *map)
 			case FILE_ACTION_REMOVEDIR:
 				remove_target_dir(entry->path);
 				break;
+
+			case FILE_ACTION_CREATESYMLINK:
+				create_target_symlink(entry->path, entry->tblspc_location);
+				break;
+
+			case FILE_ACTION_REMOVESYMLINK:
+				remove_target_symlink(entry->path);
+				break;
+
 		}
 	}
 
@@ -392,6 +427,42 @@ remove_target_dir(const char *path)
 	if (rmdir(dstpath) != 0)
 	{
 		fprintf(stderr, "could not remove directory \"%s\": %s\n",
+				dstpath, strerror(errno));
+		exit(1);
+	}
+}
+
+
+void
+create_target_symlink(const char *path, const char *link)
+{
+	char		dstpath[MAXPGPATH];
+
+	if (dry_run)
+		return;
+
+	snprintf(dstpath, sizeof(dstpath), "%s/%s", datadir_target, path);
+	if(symlink(link, dstpath) != 0)
+	{
+		fprintf(stderr, "could not create symbolic link at \"%s\": %s\n",
+				dstpath, strerror(errno));
+		exit(1);
+	}
+}
+
+
+void
+remove_target_symlink(const char *path)
+{
+	char		dstpath[MAXPGPATH];
+
+	if (dry_run)
+		return;
+
+	snprintf(dstpath, sizeof(dstpath), "%s/%s", datadir_target, path);
+	if (unlink(dstpath) != 0)
+	{
+		fprintf(stderr, "could not remove symbolic link \"%s\": %s\n",
 				dstpath, strerror(errno));
 		exit(1);
 	}
