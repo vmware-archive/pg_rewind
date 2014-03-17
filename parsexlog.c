@@ -477,30 +477,62 @@ extractPageInfo(XLogRecord *record)
 						pageinfo_add(MAIN_FORKNUM, xlrec->node, xlrec->block);
 						break;
 					}
-				case XLOG_BTREE_DELETE_PAGE:
-				case XLOG_BTREE_DELETE_PAGE_META:
-				case XLOG_BTREE_DELETE_PAGE_HALF:
+				case XLOG_BTREE_UNLINK_PAGE:
+				case XLOG_BTREE_UNLINK_PAGE_META:
 					{
-						xl_btree_delete_page *xlrec =
-							(xl_btree_delete_page *) XLogRecGetData(record);
+						xl_btree_unlink_page *xlrec =
+							(xl_btree_unlink_page *) XLogRecGetData(record);
+
+						/* page to delete */
+						pageinfo_add(MAIN_FORKNUM, xlrec->node,
+									 xlrec->deadblk);
+						/* left sib, if exists */
+						if (xlrec->leftsib != P_NONE)
+							pageinfo_add(MAIN_FORKNUM, xlrec->node,
+										 xlrec->leftsib);
+						/* rightsib */
+						pageinfo_add(MAIN_FORKNUM, xlrec->node,
+									 xlrec->rightsib);
+						/* leaf page */
+						pageinfo_add(MAIN_FORKNUM, xlrec->node,
+									 xlrec->leafblk);
+						/* leaf leftsib page, if exists */
+						if (xlrec->leafleftsib != P_NONE)
+							pageinfo_add(MAIN_FORKNUM, xlrec->node,
+										 xlrec->leafleftsib);
+						/* leaf rightsib page */
+						pageinfo_add(MAIN_FORKNUM, xlrec->node,
+									 xlrec->leafrightsib);
+						/* down page */
+						pageinfo_add(MAIN_FORKNUM, xlrec->node,
+									 xlrec->downlink);
+						/* metapage, if exists */
+						if (info == XLOG_BTREE_UNLINK_PAGE_META)
+							pageinfo_add(MAIN_FORKNUM, xlrec->node,
+										 BTREE_METAPAGE);
+						break;
+					}
+				case XLOG_BTREE_MARK_PAGE_HALFDEAD:
+					{
+						xl_btree_mark_page_halfdead *xlrec =
+							(xl_btree_mark_page_halfdead *) XLogRecGetData(record);
 
 						/* parent page */
 						pageinfo_add(MAIN_FORKNUM, xlrec->target.node,
 									 ItemPointerGetBlockNumber(&(xlrec->target.tid)));
-						/* rightsib page */
+						/* leaf page */
 						pageinfo_add(MAIN_FORKNUM, xlrec->target.node,
-									 xlrec->rightblk);
+									 xlrec->leafblk);
 						/* leftsib page, if exists */
 						if (xlrec->leftblk != P_NONE)
 							pageinfo_add(MAIN_FORKNUM, xlrec->target.node,
 										 xlrec->leftblk);
-						/* target page */
+						/* rightsib page */
 						pageinfo_add(MAIN_FORKNUM, xlrec->target.node,
-									 xlrec->deadblk);
-						/* metapage, if exists */
-						if (info == XLOG_BTREE_DELETE_PAGE_META)
-							pageinfo_add(MAIN_FORKNUM, xlrec->target.node,
-										 BTREE_METAPAGE);
+									 xlrec->rightblk);
+						/* down page */
+						pageinfo_add(MAIN_FORKNUM, xlrec->target.node,
+									 xlrec->downlink);
 						break;
 					}
 
