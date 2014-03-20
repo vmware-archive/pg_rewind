@@ -63,9 +63,10 @@ endswith(const char *haystack, const char *needle)
  * Callback for processing remote file list.
  */
 void
-process_remote_file(const char *path, size_t newsize, bool isdir)
+process_remote_file(const char *path, size_t newsize, bool isdir, const char *tblspc_location)
 {
 	bool		exists;
+	bool		issymlink = false;
 	char		localpath[MAXPGPATH];
 	struct stat statbuf;
 	filemap_t  *map = filemap;
@@ -92,8 +93,9 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
 	if (strstr(path, "/" PG_TEMP_FILES_DIR "/") != NULL)
 		return;
 
-	/* Does the corresponding local file exist? */
 	snprintf(localpath, sizeof(localpath), "%s/%s", datadir_target, path);
+
+	/* Does the corresponding local file exist? */
 	if (lstat(localpath, &statbuf) < 0)
 	{
 		if (errno == ENOENT)
@@ -104,6 +106,24 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
 					localpath, strerror(errno));
 			exit(1);
 		}
+
+		/* Does the corresponding file is a tablespace */
+		if (strcmp(tblspc_location, "") != 0)
+			issymlink = true;
+
+	}
+	else if (isdir && S_ISLNK(statbuf.st_mode))
+	{
+                /* it's a symbolic link */
+		exists = true;
+		issymlink = true;
+	}
+	else if (!isdir && S_ISLNK(statbuf.st_mode))
+	{
+		/* it's a symbolic link in source, but neither symbolic link nor
+		 * directory in target. Strange.. */
+		fprintf(stderr, "\"%s\" is not a regular file.\n", localpath);
+		exit(1);
 	}
 	else if (isdir && !S_ISDIR(statbuf.st_mode))
 	{
@@ -136,8 +156,10 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
 			exit(1);
 		}
 
-		if (!exists)
+		if (!exists && !issymlink)
 			action = FILE_ACTION_CREATEDIR;
+		else if (!exists && issymlink)
+			action = FILE_ACTION_CREATESYMLINK;
 		else
 			action = FILE_ACTION_NONE;
 		oldsize = 0;
@@ -198,6 +220,7 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
 	/* Create a new entry for this file */
 	entry = pg_malloc(sizeof(file_entry_t));
 	entry->path = pg_strdup(path);
+	entry->tblspc_location = pg_strdup(tblspc_location);
 	entry->isdir = isdir;
 	entry->action = action;
 	entry->oldsize = oldsize;
@@ -224,14 +247,35 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
  * local files that don't exist in the remote system for deletion.
  */
 void
-process_local_file(const char *path, size_t oldsize, bool isdir)
+process_local_file(const char *path, size_t oldsize, bool isdir, const char *tblspc_location)
 {
 	bool		exists;
+	bool		issymlink = false;
+	char		localpath[MAXPGPATH];
+	struct stat statbuf;
 	file_entry_t key;
 	file_entry_t *key_ptr;
 	filemap_t  *map = filemap;
 	file_action_t action;
 	file_entry_t *entry;
+
+	snprintf(localpath, sizeof(localpath), "%s/%s", datadir_target, path);
+	if (lstat(localpath, &statbuf) < 0)
+	{
+		if (errno == ENOENT)
+			exists = false;
+		else
+		{
+			fprintf(stderr, "could not stat file \"%s\": %s",
+					localpath, strerror(errno));
+			exit(1);
+		}
+
+	}
+	else if (S_ISLNK(statbuf.st_mode))
+	{
+		issymlink = true;
+	}
 
 	if (map->array == NULL)
 	{
@@ -263,11 +307,12 @@ process_local_file(const char *path, size_t oldsize, bool isdir)
 	if (!exists)
 	{
 		/* Change action depending on entry type */
-		action = isdir ? FILE_ACTION_REMOVEDIR : FILE_ACTION_REMOVE;
+		action = !isdir ? FILE_ACTION_REMOVE : !issymlink ? FILE_ACTION_REMOVEDIR : FILE_ACTION_REMOVESYMLINK;
 
 		/* Create a new entry for this file */
 		entry = pg_malloc(sizeof(file_entry_t));
 		entry->path = pg_strdup(path);
+		entry->tblspc_location = pg_strdup(tblspc_location);
 		entry->isdir = isdir;
 		entry->action = action;
 		entry->oldsize = oldsize;
@@ -343,9 +388,11 @@ process_block_change(ForkNumber forknum, RelFileNode rnode, BlockNumber blkno)
 			case FILE_ACTION_COPY:
 			case FILE_ACTION_REMOVE:
 			case FILE_ACTION_REMOVEDIR:
+			case FILE_ACTION_REMOVESYMLINK:
 				return;
 
 			case FILE_ACTION_CREATEDIR:
+			case FILE_ACTION_CREATESYMLINK:
 				fprintf(stderr, "unexpected page modification for directory \"%s\"", entry->path);
 				exit(1);
 		}
@@ -418,6 +465,10 @@ action_to_str(file_action_t action)
 			return "CREATEDIR";
 		case FILE_ACTION_REMOVEDIR:
 			return "REMOVEDIR";
+		case FILE_ACTION_CREATESYMLINK:
+			return "CREATESYMLINK";
+		case FILE_ACTION_REMOVESYMLINK:
+			return "REMOVESYMLINK";
 
 		default:
 			return "unknown";
@@ -459,7 +510,7 @@ isRelDataFile(const char *path)
 	if (!regexps_compiled)
 	{
 		/* If you change this, also update the regexp in libpq_fetch.c */
-		const char *datasegment_regex_str = "(global|base/[0-9]+)/[0-9]+$";
+		const char *datasegment_regex_str = "(global|base/[0-9]+|pg_tblspc/[0-9]+/[PG_0-9.0-9_0-9]+/[0-9]+)/[0-9]*+$";
 		rc = regcomp(&datasegment_regex, datasegment_regex_str, REG_NOSUB | REG_EXTENDED);
 		if (rc != 0)
 		{

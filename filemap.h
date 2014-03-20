@@ -21,6 +21,7 @@
  */
 typedef enum
 {
+	FILE_ACTION_CREATESYMLINK,      /* create local symbolic link */
 	FILE_ACTION_CREATEDIR,	/* create local dir */
 	FILE_ACTION_COPY,		/* copy whole file, overwriting if exists */
 	FILE_ACTION_COPY_TAIL,	/* copy tail from 'oldsize' to 'newsize' */
@@ -28,12 +29,15 @@ typedef enum
 							 * based on the parsed WAL) */
 	FILE_ACTION_TRUNCATE,	/* truncate local file to 'newsize' bytes */
 	FILE_ACTION_REMOVE,		/* remove local file */
-	FILE_ACTION_REMOVEDIR	/* remove local dir */
+	FILE_ACTION_REMOVEDIR,	/* remove local dir */
+	FILE_ACTION_REMOVESYMLINK       /* remove local symbolic link */
+
 } file_action_t;
 
 struct file_entry_t
 {
 	char	   *path;
+	char		*tblspc_location;
 	bool		isdir;
 
 	file_action_t action;
@@ -78,8 +82,8 @@ extern filemap_t *filemap_create(void);
 extern void print_filemap(void);
 
 /* Functions for populating the filemap */
-extern void process_remote_file(const char *path, size_t newsize, bool isdir);
-extern void process_local_file(const char *path, size_t newsize, bool isdir);
+extern void process_remote_file(const char *path, size_t newsize, bool isdir, const char *tblspc_location);
+extern void process_local_file(const char *path, size_t newsize, bool isdir, const char *tblspc_location);
 extern void process_block_change(ForkNumber forknum, RelFileNode rnode, BlockNumber blkno);
 extern void filemap_finalize(void);
 
