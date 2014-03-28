@@ -227,6 +227,7 @@ process_remote_file(const char *path, file_type_t type, size_t newsize,
 	entry->next = NULL;
 	entry->pagemap.bitmap = NULL;
 	entry->pagemap.bitmapsize = 0;
+	entry->isrelfile = isRelDataFile(path);
 
 	if (map->last)
 	{
@@ -309,6 +310,7 @@ process_local_file(const char *path, file_type_t type, size_t oldsize,
 		entry->next = NULL;
 		entry->pagemap.bitmap = NULL;
 		entry->pagemap.bitmapsize = 0;
+		entry->isrelfile = isRelDataFile(path);
 
 		if (map->last == NULL)
 			map->first = entry;
@@ -364,6 +366,8 @@ process_block_change(ForkNumber forknum, RelFileNode rnode, BlockNumber blkno)
 
 	if (entry)
 	{
+		Assert(entry->isrelfile);
+
 		switch (entry->action)
 		{
 			case FILE_ACTION_NONE:
@@ -516,7 +520,7 @@ isRelDataFile(const char *path)
 			"|"
 			"pg_tblspc/[0-9]+/[PG_0-9.0-9_0-9]+/[0-9]+"
 			")/"
-			"[0-9]*+$";
+			"[0-9]+(\\.[0-9]+)?$";
 		rc = regcomp(&datasegment_regex, datasegment_regex_str, REG_NOSUB | REG_EXTENDED);
 		if (rc != 0)
 		{
