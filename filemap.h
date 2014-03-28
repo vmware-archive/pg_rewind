@@ -48,6 +48,7 @@ struct file_entry_t
 	/* for a regular file */
 	size_t		oldsize;
 	size_t		newsize;
+	bool		isrelfile;		/* is it a relation data file? */
 
 	datapagemap_t	pagemap;
 
