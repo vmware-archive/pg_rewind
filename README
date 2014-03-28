@@ -93,11 +93,6 @@ pg_rewind needs that cluster uses either data checksums that can be enabled
 at server initialization with initdb or WAL logging of hint bits that can
 be enabled by settings "wal_log_hints = on" in postgresql.conf.
 
-TODO
-----
-
-* tablespace support
-
 License
 -------
 

@@ -63,14 +63,15 @@ endswith(const char *haystack, const char *needle)
  * Callback for processing remote file list.
  */
 void
-process_remote_file(const char *path, size_t newsize, bool isdir)
+process_remote_file(const char *path, file_type_t type, size_t newsize,
+					const char *link_target)
 {
 	bool		exists;
 	char		localpath[MAXPGPATH];
 	struct stat statbuf;
 	filemap_t  *map = filemap;
-	file_action_t action;
-	size_t		oldsize;
+	file_action_t action = FILE_ACTION_NONE;
+	size_t		oldsize = 0;
 	file_entry_t *entry;
 
 	Assert(map->array == NULL);
@@ -92,116 +93,137 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
 	if (strstr(path, "/" PG_TEMP_FILES_DIR "/") != NULL)
 		return;
 
-	/* Does the corresponding local file exist? */
+	/*
+	 * sanity check: a filename that looks like a data file better be a
+	 * regular file
+	 */
+	if (type != FILE_TYPE_REGULAR && isRelDataFile(path))
+	{
+		fprintf(stderr, "data file in source \"%s\" is a directory.\n", path);
+		exit(1);
+	}
+
 	snprintf(localpath, sizeof(localpath), "%s/%s", datadir_target, path);
+
+	/* Does the corresponding local file exist? */
 	if (lstat(localpath, &statbuf) < 0)
 	{
-		if (errno == ENOENT)
-			exists = false;
-		else
+		/* does not exist */
+		if (errno != ENOENT)
 		{
 			fprintf(stderr, "could not stat file \"%s\": %s",
 					localpath, strerror(errno));
 			exit(1);
 		}
-	}
-	else if (isdir && !S_ISDIR(statbuf.st_mode))
-	{
-		/* it's a directory in target, but not in source. Strange.. */
-		fprintf(stderr, "\"%s\" is not a directory.\n", localpath);
-		exit(1);
-	}
-	else if (!isdir && S_ISDIR(statbuf.st_mode))
-	{
-		/* it's a directory in source, but not in target. Strange.. */
-		fprintf(stderr, "\"%s\" is not a regular file.\n", localpath);
-		exit(1);
-	}
-	else if (!S_ISREG(statbuf.st_mode) && !S_ISDIR(statbuf.st_mode))
-	{
-		/* not a file, and not a directory. */
-		/* TODO I think we need to handle symbolic links here */
-		fprintf(stderr, "\"%s\" is not a regular file.\n", localpath);
-		exit(1);
+
+		exists = false;
 	}
 	else
 		exists = true;
 
-	if (isdir)
+	switch (type)
 	{
-		/* sanity check */
-		if (isRelDataFile(path))
-		{
-			fprintf(stderr, "data file in source \"%s\" is a directory.\n", path);
-			exit(1);
-		}
+		case FILE_TYPE_DIRECTORY:
+			if (exists && !S_ISDIR(statbuf.st_mode))
+			{
+				/* it's a directory in target, but not in source. Strange.. */
+				fprintf(stderr, "\"%s\" is not a directory.\n", localpath);
+				exit(1);
+			}
 
-		if (!exists)
-			action = FILE_ACTION_CREATEDIR;
-		else
-			action = FILE_ACTION_NONE;
-		oldsize = 0;
-	}
-	else if (!exists || !isRelDataFile(path))
-	{
-		/*
-		 * File exists in source, but not in target. Or it's a non-data file
-		 * that we have no special processing for. Copy it in toto.
-		 *
-		 * An exception: PG_VERSIONs should be identical, but avoid
-		 * overwriting it for paranoia.
-		 */
-		if (endswith(path, "PG_VERSION"))
-		{
-			action = FILE_ACTION_NONE;
-			oldsize = statbuf.st_size;
-		}
-		else
-		{
-			action = FILE_ACTION_COPY;
+			if (!exists)
+				action = FILE_ACTION_CREATE;
+			else
+				action = FILE_ACTION_NONE;
 			oldsize = 0;
-		}
-	}
-	else
-	{
-		/*
-		 * It's a data file that exists in both.
-		 *
-		 * If it's larger in target, we can truncate it. There will also be
-		 * a WAL record of the truncation in the source system, so WAL replay
-		 * would eventually truncate the target too, but we might as well do
-		 * it now.
-		 *
-		 * If it's smaller in the target, it means that it has been truncated
-		 * in the target, or enlarged in the source, or both. If it was
-		 * truncated locally, we need to copy the missing tail from the remote
-		 * system. If it was enlarged in the remote system, there will be WAL
-		 * records in the remote system for the new blocks, so we wouldn't
-		 * need to copy them here. But we don't know which scenario we're
-		 * dealing with, and there's no harm in copying the missing blocks
-		 * now, so do it now.
-		 *
-		 * If it's the same size, do nothing here. Any locally modified blocks
-		 * will be copied based on parsing the local WAL, and any remotely
-		 * modified blocks will be updated after rewinding, when the remote
-		 * WAL is replayed.
-		 */
-		oldsize = statbuf.st_size;
-		if (oldsize < newsize)
-			action = FILE_ACTION_COPY_TAIL;
-		else if (oldsize > newsize)
-			action = FILE_ACTION_TRUNCATE;
-		else
-			action = FILE_ACTION_NONE;
+			break;
+
+		case FILE_TYPE_SYMLINK:
+			if (exists && !S_ISLNK(statbuf.st_mode))
+			{
+				/* it's a symbolic link in target, but not in source. Strange.. */
+				fprintf(stderr, "\"%s\" is not a symbolic link.\n", localpath);
+				exit(1);
+			}
+
+			if (!exists)
+				action = FILE_ACTION_CREATE;
+			else
+				action = FILE_ACTION_NONE;
+			oldsize = 0;
+			break;
+
+		case FILE_TYPE_REGULAR:
+			if (exists && !S_ISREG(statbuf.st_mode))
+			{
+				fprintf(stderr, "\"%s\" is not a regular file.\n", localpath);
+				exit(1);
+			}
+
+			if (!exists || !isRelDataFile(path))
+			{
+				/*
+				 * File exists in source, but not in target. Or it's a non-data
+				 * file that we have no special processing for. Copy it in toto.
+				 *
+				 * An exception: PG_VERSIONs should be identical, but avoid
+				 * overwriting it for paranoia.
+				 */
+				if (endswith(path, "PG_VERSION"))
+				{
+					action = FILE_ACTION_NONE;
+					oldsize = statbuf.st_size;
+				}
+				else
+				{
+					action = FILE_ACTION_COPY;
+					oldsize = 0;
+				}
+			}
+			else
+			{
+				/*
+				 * It's a data file that exists in both.
+				 *
+				 * If it's larger in target, we can truncate it. There will
+				 * also be a WAL record of the truncation in the source system,
+				 * so WAL replay would eventually truncate the target too, but
+				 * we might as well do it now.
+				 *
+				 * If it's smaller in the target, it means that it has been
+				 * truncated in the target, or enlarged in the source, or both.
+				 * If it was truncated locally, we need to copy the missing
+				 * tail from the remote system. If it was enlarged in the
+				 * remote system, there will be WAL records in the remote
+				 * system for the new blocks, so we wouldn't need to copy them
+				 * here. But we don't know which scenario we're dealing with,
+				 * and there's no harm in copying the missing blocks now, so do
+				 * it now.
+				 *
+				 * If it's the same size, do nothing here. Any locally modified
+				 * blocks will be copied based on parsing the local WAL, and
+				 * any remotely modified blocks will be updated after
+				 * rewinding, when the remote WAL is replayed.
+				 */
+				oldsize = statbuf.st_size;
+				if (oldsize < newsize)
+					action = FILE_ACTION_COPY_TAIL;
+				else if (oldsize > newsize)
+					action = FILE_ACTION_TRUNCATE;
+				else
+					action = FILE_ACTION_NONE;
+			}
+			break;
 	}
 
 	/* Create a new entry for this file */
 	entry = pg_malloc(sizeof(file_entry_t));
 	entry->path = pg_strdup(path);
-	entry->isdir = isdir;
+	entry->type = type;
 	entry->action = action;
 	entry->oldsize = oldsize;
 	entry->newsize = newsize;
+	entry->link_target = link_target ? pg_strdup(link_target) : NULL;
 	entry->next = NULL;
 	entry->pagemap.bitmap = NULL;
 	entry->pagemap.bitmapsize = 0;
@@ -224,14 +246,29 @@ process_remote_file(const char *path, size_t newsize, bool isdir)
  * local files that don't exist in the remote system for deletion.
  */
 void
-process_local_file(const char *path, size_t oldsize, bool isdir)
+process_local_file(const char *path, file_type_t type, size_t oldsize,
+				   const char *link_target)
 {
 	bool		exists;
+	char		localpath[MAXPGPATH];
+	struct stat statbuf;
 	file_entry_t key;
 	file_entry_t *key_ptr;
 	filemap_t  *map = filemap;
-	file_action_t action;
 	file_entry_t *entry;
+
+	snprintf(localpath, sizeof(localpath), "%s/%s", datadir_target, path);
+	if (lstat(localpath, &statbuf) < 0)
+	{
+		if (errno == ENOENT)
+			exists = false;
+		else
+		{
+			fprintf(stderr, "could not stat file \"%s\": %s",
+					localpath, strerror(errno));
+			exit(1);
+		}
+	}
 
 	if (map->array == NULL)
 	{
@@ -262,16 +299,13 @@ process_local_file(const char *path, size_t oldsize, bool isdir)
 	/* Remove any file or folder that doesn't exist in the remote system. */
 	if (!exists)
 	{
-		/* Change action depending on entry type */
-		action = isdir ? FILE_ACTION_REMOVEDIR : FILE_ACTION_REMOVE;
-
-		/* Create a new entry for this file */
 		entry = pg_malloc(sizeof(file_entry_t));
 		entry->path = pg_strdup(path);
-		entry->isdir = isdir;
-		entry->action = action;
+		entry->type = type;
+		entry->action = FILE_ACTION_REMOVE;
 		entry->oldsize = oldsize;
 		entry->newsize = 0;
+		entry->link_target = link_target ? pg_strdup(link_target) : NULL;
 		entry->next = NULL;
 		entry->pagemap.bitmap = NULL;
 		entry->pagemap.bitmapsize = 0;
@@ -342,11 +376,10 @@ process_block_change(ForkNumber forknum, RelFileNode rnode, BlockNumber blkno)
 
 			case FILE_ACTION_COPY:
 			case FILE_ACTION_REMOVE:
-			case FILE_ACTION_REMOVEDIR:
 				return;
 
-			case FILE_ACTION_CREATEDIR:
-				fprintf(stderr, "unexpected page modification for directory \"%s\"", entry->path);
+			case FILE_ACTION_CREATE:
+				fprintf(stderr, "unexpected page modification for directory or symbolic link \"%s\"", entry->path);
 				exit(1);
 		}
 	}
@@ -408,16 +441,14 @@ action_to_str(file_action_t action)
 			return "NONE";
 		case FILE_ACTION_COPY:
 			return "COPY";
-		case FILE_ACTION_REMOVE:
-			return "REMOVE";
 		case FILE_ACTION_TRUNCATE:
 			return "TRUNCATE";
 		case FILE_ACTION_COPY_TAIL:
 			return "COPY_TAIL";
-		case FILE_ACTION_CREATEDIR:
-			return "CREATEDIR";
-		case FILE_ACTION_REMOVEDIR:
-			return "REMOVEDIR";
+		case FILE_ACTION_CREATE:
+			return "CREATE";
+		case FILE_ACTION_REMOVE:
+			return "REMOVE";
 
 		default:
 			return "unknown";
@@ -458,8 +489,34 @@ isRelDataFile(const char *path)
 	/* Compile the regexp if not compiled yet. */
 	if (!regexps_compiled)
 	{
-		/* If you change this, also update the regexp in libpq_fetch.c */
-		const char *datasegment_regex_str = "(global|base/[0-9]+)/[0-9]+$";
+		/*
+		 * Relation data files can be in one of the following directories:
+		 *
+		 * global/
+		 *		shared relations
+		 *
+		 * base/<db oid>/
+		 *		regular relations, default tablespace
+		 *
+		 * pg_tblspc/<tblspc oid>/PG_9.4_201403261/
+		 *		within a non-default tablespace (the name of the directory
+		 *		depends on version)
+		 *
+		 * And the relation data files themselves have a filename like:
+		 *
+		 * <oid>.<segment number>
+		 *
+		 * This regular expression tries to capture all of above.
+		 */
+		const char *datasegment_regex_str =
+			"("
+			"global"
+			"|"
+			"base/[0-9]+"
+			"|"
+			"pg_tblspc/[0-9]+/[PG_0-9.0-9_0-9]+/[0-9]+"
+			")/"
+			"[0-9]*+$";
 		rc = regcomp(&datasegment_regex, datasegment_regex_str, REG_NOSUB | REG_EXTENDED);
 		if (rc != 0)
 		{
@@ -502,7 +559,7 @@ path_cmp(const void *a, const void *b)
  * files and subdirectories inside it need to removed first. On creation,
  * parent directory needs to be created before files and directories inside
  * it. To achieve that, the file_action_t enum is ordered so that we can
- * just sort on that first. Furthermore, sort REMOVE_DIR entries in reverse
+ * just sort on that first. Furthermore, sort REMOVE entries in reverse
  * path order, so that "foo/bar" subdirectory is removed before "foo".
  */
 static int
@@ -516,7 +573,7 @@ final_filemap_cmp(const void *a, const void *b)
 	if (fa->action < fb->action)
 		return -1;
 
-	if (fa->action == FILE_ACTION_REMOVEDIR)
+	if (fa->action == FILE_ACTION_REMOVE)
 		return -strcmp(fa->path, fb->path);
 	else
 		return strcmp(fa->path, fb->path);
