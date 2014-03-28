@@ -44,13 +44,12 @@ extern void close_target_file(void);
 
 extern char *slurpFile(const char *datadir, const char *path, size_t *filesize);
 
-typedef void (*process_file_callback_t) (const char *path, size_t size, bool isdir);
+typedef void (*process_file_callback_t) (const char *path, file_type_t type, size_t size, const char *link_target);
 extern void traverse_datadir(const char *datadir, process_file_callback_t callback);
 
-extern void remove_target_file(const char *path);
 extern void truncate_target_file(const char *path, off_t newsize);
-extern void create_target_dir(const char *path);
-extern void remove_target_dir(const char *path);
+extern void create_target(file_entry_t *t);
+extern void remove_target(file_entry_t *t);
 extern void check_samefile(int fd1, int fd2);
 
 

@@ -60,20 +60,30 @@ libpqProcessFileList(void)
 
 	sql =
 		"-- Create a recursive directory listing of the whole data directory\n"
-		"with recursive files (path, size, isdir) as (\n"
-		"  select filename as path, size, isdir\n"
-		"  from (select pg_ls_dir('.') as filename) as filenames,\n"
-		"       pg_stat_file(filename) as this\n"
+		"with recursive files (path, filename, size, isdir) as (\n"
+		"  select '' as path, filename, size, isdir from\n"
+		"  (select pg_ls_dir('.') as filename) as fn,\n"
+		"        pg_stat_file(fn.filename) as this\n"
 		"  union all\n"
-		"  select parent.path || '/' || filename, this.size, this.isdir\n"
+		"  select parent.path || parent.filename || '/' as path,\n"
+		"         fn, this.size, this.isdir\n"
 		"  from files as parent,\n"
-		"       pg_ls_dir(parent.path) as filename,\n"
-		"       pg_stat_file(parent.path || '/' || filename) as this\n"
+		"       pg_ls_dir(parent.path || parent.filename) as fn,\n"
+		"       pg_stat_file(parent.path || parent.filename || '/' || fn) as this\n"
 		"       where parent.isdir = 't'\n"
 		")\n"
-		"-- Using the cte, fetch all files in chunks.\n"
-		"select path, size, isdir from files\n";
-
+		"-- Using the cte, fetch a listing of the all the files.\n"
+		"--\n"
+		"-- For tablespaces, use pg_tablespace_location() function to fetch\n"
+		"-- the link target (there is no backend function to get a symbolic\n"
+		"-- link's target in general, so if the admin has put any custom\n"
+		"-- symbolic links in the data directory, they won't be copied\n"
+		"-- correctly)\n"
+		"select path || filename, size, isdir,\n"
+		"       pg_tablespace_location(pg_tablespace.oid) as link_target\n"
+		"from files\n"
+		"left outer join pg_tablespace on files.path = 'pg_tblspc/'\n"
+		"                             and oid::text = files.filename\n";
 	res = PQexec(conn, sql);
 
 	if (PQresultStatus(res) != PGRES_TUPLES_OK)
@@ -84,7 +94,7 @@ libpqProcessFileList(void)
 	}
 
 	/* sanity check the result set */
-	if (!(PQnfields(res) == 3))
+	if (!(PQnfields(res) == 4))
 	{
 		fprintf(stderr, "unexpected result set while fetching file list\n");
 		exit(1);
@@ -93,11 +103,20 @@ libpqProcessFileList(void)
 	/* Read result to local variables */
 	for (i = 0; i < PQntuples(res); i++)
 	{
-		char *path = PQgetvalue(res, i, 0);
-		int filesize = atoi(PQgetvalue(res, i, 1));
-		bool isdir = (strcmp(PQgetvalue(res, i, 2), "t") == 0);
+		char	   *path = PQgetvalue(res, i, 0);
+		int			filesize = atoi(PQgetvalue(res, i, 1));
+		bool		isdir = (strcmp(PQgetvalue(res, i, 2), "t") == 0);
+		char	   *link_target = PQgetvalue(res, i, 3);
+		file_type_t type;
 
-		process_remote_file(path, filesize, isdir);
+		if (link_target[0])
+			type = FILE_TYPE_SYMLINK;
+		else if (isdir)
+			type = FILE_TYPE_DIRECTORY;
+		else
+			type = FILE_TYPE_REGULAR;
+
+		process_remote_file(path, type, filesize, link_target);
 	}
 }
 
@@ -326,10 +345,6 @@ libpq_executeFileMap(filemap_t *map)
 				copy_file_range(entry->path, 0, entry->newsize);
 				break;
 
-			case FILE_ACTION_REMOVE:
-				remove_target_file(entry->path);
-				break;
-
 			case FILE_ACTION_TRUNCATE:
 				truncate_target_file(entry->path, entry->newsize);
 				break;
@@ -338,12 +353,12 @@ libpq_executeFileMap(filemap_t *map)
 				copy_file_range(entry->path, entry->oldsize, entry->newsize);
 				break;
 
-			case FILE_ACTION_CREATEDIR:
-				create_target_dir(entry->path);
+			case FILE_ACTION_REMOVE:
+				remove_target(entry);
 				break;
 
-			case FILE_ACTION_REMOVEDIR:
-				remove_target_dir(entry->path);
+			case FILE_ACTION_CREATE:
+				create_target(entry);
 				break;
 		}
 	}

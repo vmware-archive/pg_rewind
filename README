@@ -92,11 +92,6 @@ Restrictions
 pg_rewind needs that cluster uses data checksums to prevent data corruption that
 might occur because of hint bits.
 
-TODO
-----
-
-* tablespace support
-
 License
 -------
 
