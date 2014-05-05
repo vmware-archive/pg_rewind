@@ -503,9 +503,10 @@ extractPageInfo(XLogRecord *record)
 						/* leaf rightsib page */
 						pageinfo_add(MAIN_FORKNUM, xlrec->node,
 									 xlrec->leafrightsib);
-						/* down page */
-						pageinfo_add(MAIN_FORKNUM, xlrec->node,
-									 xlrec->downlink);
+						/* remaining parent page */
+						if (xlrec->topparent != InvalidBlockNumber)
+							pageinfo_add(MAIN_FORKNUM, xlrec->node,
+										 xlrec->topparent);
 						/* metapage, if exists */
 						if (info == XLOG_BTREE_UNLINK_PAGE_META)
 							pageinfo_add(MAIN_FORKNUM, xlrec->node,
@@ -530,9 +531,10 @@ extractPageInfo(XLogRecord *record)
 						/* rightsib page */
 						pageinfo_add(MAIN_FORKNUM, xlrec->target.node,
 									 xlrec->rightblk);
-						/* down page */
-						pageinfo_add(MAIN_FORKNUM, xlrec->target.node,
-									 xlrec->downlink);
+						/* remaining parent page */
+						if (xlrec->topparent != InvalidBlockNumber)
+							pageinfo_add(MAIN_FORKNUM, xlrec->target.node,
+										 xlrec->topparent);
 						break;
 					}
 
