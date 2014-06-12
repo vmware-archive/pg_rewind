@@ -50,10 +50,10 @@ mkdir -p $TESTROOT
 PGDATABASE="";        unset PGDATABASE
 PGUSER="";            unset PGUSER
 PGSERVICE="";         unset PGSERVICE
-PGSSLMODE=""          unset PGSSLMODE
+PGSSLMODE="";         unset PGSSLMODE
 PGREQUIRESSL="";      unset PGREQUIRESSL
 PGCONNECT_TIMEOUT=""; unset PGCONNECT_TIMEOUT
-PGHOST=""             unset PGHOST
+PGHOST="";            unset PGHOST
 PGHOSTADDR="";        unset PGHOSTADDR
 
 export PGDATABASE="postgres"
@@ -67,4 +67,3 @@ PORT_STANDBY=`expr $PORT_MASTER + 1`
 
 MASTER_PSQL="psql -a --no-psqlrc -p $PORT_MASTER"
 STANDBY_PSQL="psql -a --no-psqlrc -p $PORT_STANDBY"
-
