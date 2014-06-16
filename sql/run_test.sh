@@ -111,12 +111,12 @@ echo "Running pg_rewind..."
 echo "Running pg_rewind..." >> $log_path
 if [ $TEST_SUITE == "local" ]; then
 	# Do rewind using a local pgdata as source
-	./pg_rewind \
+	pg_rewind \
 		--source-pgdata=$TEST_STANDBY \
 		--target-pgdata=$TEST_MASTER >>$log_path 2>&1
 elif [ $TEST_SUITE == "remote" ]; then
 	# Do rewind using a remote connection as source
-	./pg_rewind \
+	pg_rewind \
 		--source-server="port=$PORT_STANDBY dbname=postgres" \
 		--target-pgdata=$TEST_MASTER >>$log_path 2>&1
 else
