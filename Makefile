@@ -56,10 +56,10 @@ xlogreader.c: % : $(top_srcdir)/src/backend/access/transam/%
 
 check-local:
 	echo "Running tests against local data directory, in copy-mode"
-	TEST_SUITE="local" $(MAKE) installcheck
+	bindir=$(bindir) TEST_SUITE="local" $(MAKE) installcheck
 
 check-remote:
 	echo "Running tests against a running standby, via libpq"
-	TEST_SUITE="remote" $(MAKE) installcheck
+	bindir=$(bindir) TEST_SUITE="remote" $(MAKE) installcheck
 
 check-both: check-local check-remote

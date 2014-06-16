@@ -33,6 +33,10 @@ case $testhost in
 	*)      LISTEN_ADDRESSES="" ;;
 esac
 
+# Indicate of binaries
+PATH=$bindir:$PATH
+export PATH
+
 # Adjust these paths for your environment
 TESTROOT=$PWD/tmp_check
 TEST_MASTER=$TESTROOT/data_master
