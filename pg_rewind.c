@@ -33,6 +33,7 @@ static void createBackupLabel(XLogRecPtr startpoint, TimeLineID starttli,
 				  XLogRecPtr checkpointloc);
 
 static void digestControlFile(ControlFileData *ControlFile, char *source, size_t size);
+static void UpdateControlFile(ControlFileData *ControlFile);
 static void sanityChecks(void);
 static void findCommonAncestorTimeline(XLogRecPtr *recptr, TimeLineID *tli);
 
@@ -265,6 +266,12 @@ main(int argc, char **argv)
 
 	createBackupLabel(chkptredo, chkpttli, chkptrec);
 
+	/* Modify the pg_control file for archive recovery */
+	ControlFile_source.minRecoveryPoint = divergerec;
+	ControlFile_source.minRecoveryPointTLI = ControlFile_target.checkPointCopy.ThisTimeLineID;
+	ControlFile_source.state = DB_IN_ARCHIVE_RECOVERY;
+	UpdateControlFile(&ControlFile_source);
+
 	printf("Done!\n");
 
 	return 0;
@@ -423,8 +430,8 @@ createBackupLabel(XLogRecPtr startpoint, TimeLineID starttli, XLogRecPtr checkpo
 			(uint32) (startpoint >> 32), (uint32) startpoint, xlogfilename);
 	fprintf(fp, "CHECKPOINT LOCATION: %X/%X\n",
 			(uint32) (checkpointloc >> 32), (uint32) checkpointloc);
-	fprintf(fp, "BACKUP METHOD: rewound with pg_rewind\n");
-	fprintf(fp, "BACKUP FROM: master\n");
+	fprintf(fp, "BACKUP METHOD: rewound\n");
+	fprintf(fp, "BACKUP FROM: standby\n");
 	fprintf(fp, "START TIME: %s\n", strfbuf);
 	/* omit LABEL: line */
 
@@ -452,4 +459,39 @@ digestControlFile(ControlFileData *ControlFile, char *src, size_t size)
 	memcpy(ControlFile, src, sizeof(ControlFileData));
 
 	/* TODO: check crc */
+}
+
+static void
+UpdateControlFile(ControlFileData *ControlFile)
+{
+
+	char	path[MAXPGPATH];
+	FILE	*fp;
+
+	if (dry_run)
+		return;
+
+	INIT_CRC32(ControlFile->crc);
+	COMP_CRC32(ControlFile->crc,
+			   (char *) ControlFile,
+			   offsetof(ControlFileData, crc));
+	FIN_CRC32(ControlFile->crc);
+
+	snprintf(path, MAXPGPATH,
+			"%s/global/pg_control", datadir_target);
+
+	if ((fp  = fopen(path, "wb")) == NULL)
+	{
+		fprintf(stderr,"Could not open the pg_control file");
+	}
+
+	if (fwrite(ControlFile, 1, sizeof(ControlFileData), fp) != sizeof(ControlFileData))
+	{
+		fprintf(stderr,"Could not write the pg_control file");
+	}
+
+	if (fclose(fp)  )
+	{
+		fprintf(stderr,"Could not close the pg_control file");
+	}
 }
