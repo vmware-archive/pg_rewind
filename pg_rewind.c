@@ -447,7 +447,7 @@ checkControlFile(ControlFileData *ControlFile)
 	/* Calculate CRC */
 	INIT_CRC32(crc);
     COMP_CRC32(crc,
-			   (char *) &ControlFile,
+			   (char *) ControlFile,
 			   offsetof(ControlFileData, crc));
     FIN_CRC32(crc);
 
