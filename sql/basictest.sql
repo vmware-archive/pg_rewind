@@ -24,6 +24,9 @@ function standby_following_master
 {
 # Insert additional data on master that will be replicated to standby
 $MASTER_PSQL -c "INSERT INTO tbl1 values ('in master, before promotion');"
+
+# Launch checkpoint after standby has been started
+$MASTER_PSQL -c "CHECKPOINT;"
 }
 
 # This script runs after the standby has been promoted. Old Master is still

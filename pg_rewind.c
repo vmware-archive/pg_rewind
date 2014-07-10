@@ -33,6 +33,8 @@ static void createBackupLabel(XLogRecPtr startpoint, TimeLineID starttli,
 				  XLogRecPtr checkpointloc);
 
 static void digestControlFile(ControlFileData *ControlFile, char *source, size_t size);
+static void updateControlFile(ControlFileData *ControlFile,
+							  char *datadir);
 static void sanityChecks(void);
 static void findCommonAncestorTimeline(XLogRecPtr *recptr, TimeLineID *tli);
 
@@ -92,6 +94,7 @@ main(int argc, char **argv)
 	size_t		size;
 	char	   *buffer;
 	bool		rewind_needed;
+	ControlFileData	ControlFile;
 
 	progname = get_progname(argv[0]);
 
@@ -265,6 +268,16 @@ main(int argc, char **argv)
 
 	createBackupLabel(chkptredo, chkpttli, chkptrec);
 
+	/*
+	 * Update control file of target file and make it ready to
+	 * perform archive recovery when restarting.
+	 */
+	memcpy(&ControlFile, &ControlFile_source, sizeof(ControlFileData));
+	ControlFile.minRecoveryPoint = divergerec;
+	ControlFile.minRecoveryPointTLI = ControlFile_target.checkPointCopy.ThisTimeLineID;
+	ControlFile.state = DB_IN_ARCHIVE_RECOVERY;
+	updateControlFile(&ControlFile, datadir_target);
+
 	printf("Done!\n");
 
 	return 0;
@@ -424,7 +437,7 @@ createBackupLabel(XLogRecPtr startpoint, TimeLineID starttli, XLogRecPtr checkpo
 	fprintf(fp, "CHECKPOINT LOCATION: %X/%X\n",
 			(uint32) (checkpointloc >> 32), (uint32) checkpointloc);
 	fprintf(fp, "BACKUP METHOD: pg_rewind\n");
-	fprintf(fp, "BACKUP FROM: master\n");
+	fprintf(fp, "BACKUP FROM: standby\n");
 	fprintf(fp, "START TIME: %s\n", strfbuf);
 	/* omit LABEL: line */
 
@@ -476,3 +489,43 @@ digestControlFile(ControlFileData *ControlFile, char *src, size_t size)
 	/* Additional checks on control file */
 	checkControlFile(ControlFile);
 }
+
+/*
+ * Update a control file with fresh content
+ */
+static void
+updateControlFile(ControlFileData *ControlFile, char *datadir)
+{
+
+	char    path[MAXPGPATH];
+	FILE    *fp;
+
+	if (dry_run)
+		return;
+
+	/* Recalculate CRC of control file */
+	INIT_CRC32(ControlFile->crc);
+	COMP_CRC32(ControlFile->crc,
+			   (char *) ControlFile,
+			   offsetof(ControlFileData, crc));
+	FIN_CRC32(ControlFile->crc);
+
+	snprintf(path, MAXPGPATH,
+			 "%s/global/pg_control", datadir);
+
+	if ((fp  = fopen(path, "wb")) == NULL)
+	{
+		fprintf(stderr,"Could not open the pg_control file");
+	}
+
+	if (fwrite(ControlFile, 1,
+			   sizeof(ControlFileData), fp) != sizeof(ControlFileData))
+	{
+		fprintf(stderr,"Could not write the pg_control file");
+	}
+
+	if (fclose(fp))
+	{
+		fprintf(stderr,"Could not close the pg_control file");
+	}
+ }

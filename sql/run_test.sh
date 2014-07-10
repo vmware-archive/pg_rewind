@@ -128,9 +128,15 @@ fi
 # Now move back postgresql.conf with old settings
 mv $TESTROOT/master-postgresql.conf.tmp $TEST_MASTER/postgresql.conf
 
+# Plug-in rewound node to the now-promoted standby node
+cat > $TEST_MASTER/recovery.conf <<EOF
+primary_conninfo='port=$PORT_STANDBY'
+standby_mode=on
+recovery_target_timeline='latest'
+EOF
+
 # Restart the master to check that rewind went correctly
 pg_ctl -w -D $TEST_MASTER start >>$log_path 2>&1
-
 
 #### Now run the test-specific parts to check the result
 echo "Old master restarted after rewind."
