@@ -423,7 +423,7 @@ createBackupLabel(XLogRecPtr startpoint, TimeLineID starttli, XLogRecPtr checkpo
 			(uint32) (startpoint >> 32), (uint32) startpoint, xlogfilename);
 	fprintf(fp, "CHECKPOINT LOCATION: %X/%X\n",
 			(uint32) (checkpointloc >> 32), (uint32) checkpointloc);
-	fprintf(fp, "BACKUP METHOD: rewound with pg_rewind\n");
+	fprintf(fp, "BACKUP METHOD: pg_rewind\n");
 	fprintf(fp, "BACKUP FROM: master\n");
 	fprintf(fp, "START TIME: %s\n", strfbuf);
 	/* omit LABEL: line */
