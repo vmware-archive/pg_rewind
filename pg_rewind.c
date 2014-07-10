@@ -436,6 +436,28 @@ createBackupLabel(XLogRecPtr startpoint, TimeLineID starttli, XLogRecPtr checkpo
 	}
 }
 
+/*
+ * Check CRC of control file
+ */
+static void
+checkControlFile(ControlFileData *ControlFile)
+{
+	pg_crc32	crc;
+
+	/* Calculate CRC */
+	INIT_CRC32(crc);
+    COMP_CRC32(crc,
+			   (char *) &ControlFile,
+			   offsetof(ControlFileData, crc));
+    FIN_CRC32(crc);
+
+	/* And simply compare it */
+	if (!EQ_CRC32(crc, ControlFile->crc))
+	{
+		fprintf(stderr, "unexpected control file CRC\n");
+		exit(1);
+	}
+}
 
 /*
  * Verify control file contents in the buffer src, and copy it to *ControlFile.
@@ -451,5 +473,6 @@ digestControlFile(ControlFileData *ControlFile, char *src, size_t size)
 	}
 	memcpy(ControlFile, src, sizeof(ControlFileData));
 
-	/* TODO: check crc */
+	/* Additional checks on control file */
+	checkControlFile(ControlFile);
 }
