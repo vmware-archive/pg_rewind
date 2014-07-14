@@ -42,13 +42,11 @@ function after_promotion
   :
 }
 
-
 # See what files and directories are present after rewind.
 function after_rewind
 {
     (cd $TEST_MASTER; find tst_* | sort)
 }
-
 
 # Run the test
 . sql/run_test.sh

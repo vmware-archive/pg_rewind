@@ -93,7 +93,6 @@ sleep 1
 echo "Standby promoted."
 after_promotion
 
-
 # Stop the master and be ready to perform the rewind
 pg_ctl -w -D $TEST_MASTER stop -m fast >>$log_path 2>&1
 
