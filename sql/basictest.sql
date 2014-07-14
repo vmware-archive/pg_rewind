@@ -49,7 +49,5 @@ function after_rewind
 $MASTER_PSQL -c "SELECT * from tbl1"
 }
 
-
-
 # Run the test
 . sql/run_test.sh
