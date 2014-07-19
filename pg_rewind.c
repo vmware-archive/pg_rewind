@@ -519,7 +519,7 @@ updateControlFile(ControlFileData *ControlFile, char *datadir)
 	}
 
 	if (fwrite(ControlFile, 1,
-			   sizeof(ControlFileData), fp) != sizeof(ControlFileData))
+			   PG_CONTROL_SIZE, fp) != PG_CONTROL_SIZE)
 	{
 		fprintf(stderr,"Could not write the pg_control file");
 	}
