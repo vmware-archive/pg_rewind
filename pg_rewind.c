@@ -515,17 +515,20 @@ updateControlFile(ControlFileData *ControlFile, char *datadir)
 
 	if ((fp  = fopen(path, "wb")) == NULL)
 	{
-		fprintf(stderr,"Could not open the pg_control file");
+		fprintf(stderr,"Could not open the pg_control file\n");
+		exit(1);
 	}
 
 	if (fwrite(ControlFile, 1,
 			   PG_CONTROL_SIZE, fp) != PG_CONTROL_SIZE)
 	{
-		fprintf(stderr,"Could not write the pg_control file");
+		fprintf(stderr,"Could not write the pg_control file\n");
+		exit(1);
 	}
 
 	if (fclose(fp))
 	{
-		fprintf(stderr,"Could not close the pg_control file");
+		fprintf(stderr,"Could not close the pg_control file\n");
+		exit(1);
 	}
  }
