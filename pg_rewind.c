@@ -496,8 +496,8 @@ digestControlFile(ControlFileData *ControlFile, char *src, size_t size)
 static void
 updateControlFile(ControlFileData *ControlFile, char *datadir)
 {
-
 	char    path[MAXPGPATH];
+	char	buffer[PG_CONTROL_SIZE];
 	FILE    *fp;
 
 	if (dry_run)
@@ -510,6 +510,14 @@ updateControlFile(ControlFileData *ControlFile, char *datadir)
 			   offsetof(ControlFileData, crc));
 	FIN_CRC32(ControlFile->crc);
 
+	/*
+	 * Write out PG_CONTROL_SIZE bytes into pg_control by zero-padding
+	 * the excess over sizeof(ControlFileData) to avoid premature EOF
+	 * related errors when reading it.
+	 */
+	memset(buffer, 0, PG_CONTROL_SIZE);
+	memcpy(buffer, ControlFile, sizeof(ControlFileData));
+
 	snprintf(path, MAXPGPATH,
 			 "%s/global/pg_control", datadir);
 
@@ -519,7 +527,7 @@ updateControlFile(ControlFileData *ControlFile, char *datadir)
 		exit(1);
 	}
 
-	if (fwrite(ControlFile, 1,
+	if (fwrite(buffer, 1,
 			   PG_CONTROL_SIZE, fp) != PG_CONTROL_SIZE)
 	{
 		fprintf(stderr,"Could not write the pg_control file\n");
