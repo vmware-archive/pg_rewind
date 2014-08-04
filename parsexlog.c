@@ -342,15 +342,6 @@ extractPageInfo(XLogRecord *record)
 										 ItemPointerGetBlockNumber(&xlrec->newtid));
 						break;
 					}
-
-				case XLOG_HEAP_NEWPAGE:
-					{
-						xl_heap_newpage *xlrec =
-							(xl_heap_newpage *) XLogRecGetData(record);
-
-						pageinfo_add(MAIN_FORKNUM, xlrec->node, xlrec->blkno);
-						break;
-					}
 				case XLOG_HEAP_LOCK:
 					{
 						xl_heap_lock *xlrec =
