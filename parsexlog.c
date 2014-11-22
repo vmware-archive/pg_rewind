@@ -71,9 +71,12 @@ extractPageMap(const char *datadir, XLogRecPtr startpoint, TimeLineID tli)
 	record = XLogReadRecord(xlogreader, startpoint, &errormsg);
 	if (record == NULL)
 	{
-		fprintf(stderr, "could not read WAL starting at %X/%X: %s\n",
+		fprintf(stderr, "could not read WAL starting at %X/%X",
 				(uint32) (startpoint >> 32),
-				(uint32) (startpoint), errormsg);
+				(uint32) (startpoint));
+		if (errormsg)
+			fprintf(stderr, ": %s", errormsg);
+		fprintf(stderr, "\n");
 		exit(1);
 	}
 
@@ -85,7 +88,6 @@ extractPageMap(const char *datadir, XLogRecPtr startpoint, TimeLineID tli)
 
 		if (errormsg)
 			fprintf(stderr, "error reading xlog record: %s\n", errormsg);
-
 	} while(record != NULL);
 
 	XLogReaderFree(xlogreader);
@@ -116,8 +118,11 @@ readOneRecord(const char *datadir, XLogRecPtr ptr, TimeLineID tli)
 	record = XLogReadRecord(xlogreader, ptr, &errormsg);
 	if (record == NULL)
 	{
-		fprintf(stderr, "could not read WAL record at %X/%X: %s\n",
-				(uint32) (ptr >> 32), (uint32) (ptr), errormsg);
+		fprintf(stderr, "could not read WAL record at %X/%X",
+				(uint32) (ptr >> 32), (uint32) (ptr));
+		if (errormsg)
+			fprintf(stderr, ": %s", errormsg);
+		fprintf(stderr, "\n");
 		exit(1);
 	}
 	endptr = xlogreader->EndRecPtr;
@@ -170,9 +175,12 @@ findLastCheckpoint(const char *datadir, XLogRecPtr forkptr, TimeLineID tli,
 
 		if (record == NULL)
 		{
-			fprintf(stderr, "could not find previous WAL record at %X/%X: %s\n",
+			fprintf(stderr, "could not find previous WAL record at %X/%X",
 					(uint32) (searchptr >> 32),
-					(uint32) (searchptr), errormsg);
+					(uint32) (searchptr));
+			if (errormsg)
+				fprintf(stderr, ": %s", errormsg);
+			fprintf(stderr, "\n");
 			exit(1);
 		}
 
