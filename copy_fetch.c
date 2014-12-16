@@ -280,6 +280,9 @@ copy_file_range(const char *path, off_t begin, off_t end, bool trunc)
 		write_file_range(buf, begin, readlen);
 		begin += readlen;
 	}
+
+	if (close(srcfd) != 0)
+		fprintf(stderr, "error closing file \"%s\": %s\n", srcpath, strerror(errno));
 }
 
 /*
