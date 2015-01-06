@@ -3,8 +3,8 @@
  * copy_fetch.c
  *	  Functions for copying a PostgreSQL data directory
  *
- * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
- * Portions Copyright (c) 2013 VMware, Inc. All Rights Reserved.
+ * Portions Copyright (c) 1996-2015, PostgreSQL Global Development Group
+ * Portions Copyright (c) 2013-2015 VMware, Inc. All Rights Reserved.
  *
  *-------------------------------------------------------------------------
  */

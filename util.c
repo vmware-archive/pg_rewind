@@ -3,7 +3,7 @@
  * util.c
  *		Misc utility functions
  *
- * Portions Copyright (c) 2013 VMware, Inc. All Rights Reserved.
+ * Portions Copyright (c) 2013-2015 VMware, Inc. All Rights Reserved.
  *
  *-------------------------------------------------------------------------
  */
