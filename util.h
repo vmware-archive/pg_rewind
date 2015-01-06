@@ -4,6 +4,7 @@
  *		Prototypes for functions in util.c
  *
  * Portions Copyright (c) 2013 VMware, Inc. All Rights Reserved.
+ *
  *-------------------------------------------------------------------------
  */
 #ifndef UTIL_H
