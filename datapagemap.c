@@ -1,9 +1,13 @@
-/*
- * A data structure for keeping track of data pages that have changed.
+/*-------------------------------------------------------------------------
+ *
+ * datapagemap.c
+ *	  A data structure for keeping track of data pages that have changed.
  *
  * This is a fairly simple bitmap.
  *
  * Copyright (c) 2013 VMware, Inc. All Rights Reserved.
+ *
+ *-------------------------------------------------------------------------
  */
 
 #include "postgres_fe.h"
