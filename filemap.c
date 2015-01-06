@@ -1,7 +1,11 @@
-/*
- * A data structure for keeping track of files that have changed.
+/*-------------------------------------------------------------------------
+ *
+ * filemap.c
+ *	  A data structure for keeping track of files that have changed.
  *
  * Copyright (c) 2013 VMware, Inc. All Rights Reserved.
+ *
+ *-------------------------------------------------------------------------
  */
 
 #include "postgres_fe.h"
