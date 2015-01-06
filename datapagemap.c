@@ -5,7 +5,7 @@
  *
  * This is a fairly simple bitmap.
  *
- * Copyright (c) 2013 VMware, Inc. All Rights Reserved.
+ * Copyright (c) 2013-2014 VMware, Inc. All Rights Reserved.
  *
  *-------------------------------------------------------------------------
  */

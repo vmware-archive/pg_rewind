@@ -3,8 +3,8 @@
  * parsexlog.c
  *	  Functions for reading Write-Ahead-Log
  *
- * Portions Copyright (c) 2013 VMware, Inc. All Rights Reserved.
- * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
+ * Portions Copyright (c) 2013-2014 VMware, Inc. All Rights Reserved.
+ * Portions Copyright (c) 1996-2014, PostgreSQL Global Development Group
  * Portions Copyright (c) 1996-2008, Nippon Telegraph and Telephone Corporation
  * Portions Copyright (c) 1994, Regents of the University of California
  *

@@ -1,6 +1,6 @@
 # Makefile for pg_rewind
 #
-# Copyright (c) 2013 VMware, Inc. All Rights Reserved.
+# Copyright (c) 2013-2014 VMware, Inc. All Rights Reserved.
 #
 
 PGFILEDESC = "pg_rewind - repurpose an old master server as standby"

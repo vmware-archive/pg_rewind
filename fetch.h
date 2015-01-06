@@ -8,7 +8,7 @@
  * directory (copy method), or a remote PostgreSQL server (libpq fetch
  * method).
  *
- * Portions Copyright (c) 2013 VMware, Inc. All Rights Reserved.
+ * Portions Copyright (c) 2013-2014 VMware, Inc. All Rights Reserved.
  *
  *-------------------------------------------------------------------------
  */
