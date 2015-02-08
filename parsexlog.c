@@ -404,6 +404,14 @@ extractPageInfo(XLogRecord *record)
 						pageinfo_add(MAIN_FORKNUM, xlrec->node, xlrec->block);
 						break;
 					}
+				case XLOG_HEAP2_FREEZE_PAGE:
+					{
+						xl_heap_freeze_page *xlrec =
+							(xl_heap_freeze_page *) XLogRecGetData(record);
+
+						pageinfo_add(MAIN_FORKNUM, xlrec->node, xlrec->block);
+						break;
+					}
 				case XLOG_HEAP2_CLEANUP_INFO:
 					/* nothing to do */
 					break;
@@ -416,7 +424,6 @@ extractPageInfo(XLogRecord *record)
 						pageinfo_add(MAIN_FORKNUM, xlrec->node, xlrec->block);
 						break;
 					}
-
 
 				case XLOG_HEAP2_MULTI_INSERT:
 					{
