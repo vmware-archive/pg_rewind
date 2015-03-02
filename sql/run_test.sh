@@ -35,7 +35,7 @@ cat >> $TEST_MASTER/postgresql.conf <<EOF
 wal_level = hot_standby
 max_wal_senders = 2
 wal_keep_segments = 20
-checkpoint_segments = 50
+max_wal_size = 256MB
 shared_buffers = 1MB
 wal_log_hints = on
 log_line_prefix = 'M  %m %p '
