@@ -32,7 +32,11 @@ variable: "make USE_PGXS=1 top_srcdir=<path to PostgreSQL source tree>"
 
 In addition, you must have pg_config in $PATH.
 
-The current version of pg_rewind is compatible with PostgreSQL version 9.3.
+The current version of pg_rewind is compatible with PostgreSQL down to 9.3,
+with one branch available for each version dependent on upstream Postgres:
+- REL9_3_STABLE for compatibility with PostgreSQL 9.3
+- REL9_4_STABLE for compatibility with PostgreSQL 9.4
+- master for compatibility with PostgreSQL 9.5~
 
 Usage
 -----
