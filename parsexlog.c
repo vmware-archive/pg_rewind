@@ -363,6 +363,11 @@ extractPageInfo(XLogReaderState *record)
 
 		if (!XLogRecGetBlockTag(record, block_id, &rnode, &forknum, &blkno))
 			continue;
+
+		/* We only care about the main fork; others are copied in toto */
+		if (forknum != MAIN_FORKNUM)
+			continue;
+
 		process_block_change(forknum, rnode, blkno);
 	}
 }
