@@ -347,6 +347,7 @@ process_block_change(ForkNumber forknum, RelFileNode rnode, BlockNumber blkno)
 	BlockNumber	blkno_inseg;
 	int			segno;
 	filemap_t  *map = filemap;
+	file_entry_t **e;
 
 	Assert(filemap->array);
 
@@ -358,14 +359,12 @@ process_block_change(ForkNumber forknum, RelFileNode rnode, BlockNumber blkno)
 	key.path = (char *) path;
 	key_ptr = &key;
 
-	{
-		file_entry_t **e = bsearch(&key_ptr, map->array, map->narray,
-								   sizeof(file_entry_t *), path_cmp);
-		if (e)
-			entry = *e;
-		else
-			entry = NULL;
-	}
+	e = bsearch(&key_ptr, map->array, map->narray,
+							   sizeof(file_entry_t *), path_cmp);
+	if (e)
+		entry = *e;
+	else
+		entry = NULL;
 	free(path);
 
 	if (entry)
@@ -426,7 +425,7 @@ filemap_list_to_array(void)
 		next = entry->next;
 		entry->next = NULL;
 	}
-	Assert (narray == filemap->nlist + filemap->narray);
+	Assert(narray == filemap->nlist + filemap->narray);
 	filemap->narray = narray;
 	filemap->nlist = 0;
 	filemap->first = filemap->last = NULL;

@@ -18,11 +18,13 @@
 char *
 datasegpath(RelFileNode rnode, ForkNumber forknum, BlockNumber segno)
 {
-	char *path = relpathperm(rnode, forknum);
+	char *path;
+	char *segpath;
 
+	path = relpathperm(rnode, forknum);
 	if (segno > 0)
 	{
-		char *segpath = pg_malloc(strlen(path) + 13);
+		segpath = pg_malloc(strlen(path) + 13);
 		sprintf(segpath, "%s.%u", path, segno);
 		pg_free(path);
 		return segpath;
