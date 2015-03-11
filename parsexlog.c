@@ -25,7 +25,7 @@
 #include "access/xlogreader.h"
 #include "catalog/pg_control.h"
 #include "catalog/storage_xlog.h"
-#include "commands/dbcommands.h"
+#include "commands/dbcommands_xlog.h"
 
 
 /*
