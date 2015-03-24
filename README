@@ -10,6 +10,11 @@ and does not require reading through all files in the cluster. That makes it
 a lot faster when the database is large and only a small portion of it differs
 between the clusters.
 
+Note: As pg_rewind has been included in PostgreSQL 9.5, new major releases
+of pg_rewind will not be included in this repository. This means that master
+branch is now inactive. However, earlier versions based on 9.3 and 9.4 are still
+maintained here, and can still be used on clusters older than 9.5.
+
 Download
 --------
 
