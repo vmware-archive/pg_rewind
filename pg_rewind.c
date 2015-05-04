@@ -96,6 +96,7 @@ main(int argc, char **argv)
 	bool		rewind_needed;
 	ControlFileData	ControlFile;
 
+	set_pglocale_pgservice(argv[0], PG_TEXTDOMAIN("pg_rewind"));
 	progname = get_progname(argv[0]);
 
 	/* Set default parameter values */
@@ -167,6 +168,22 @@ main(int argc, char **argv)
 		fprintf(stderr, _("Try \"%s --help\" for more information.\n"), progname);
 		exit(1);
 	}
+
+	/*
+	 * Don't allow pg_rewind to be run as root, to avoid overwriting the
+	 * ownership of files in the data directory. We need only check for root
+	 * -- any other user won't have sufficient permissions to modify files in
+	 * the data directory.
+	 */
+#ifndef WIN32
+	if (geteuid() == 0)
+	{
+		fprintf(stderr, "cannot be executed by \"root\"\n"
+				"You must run %s as the PostgreSQL superuser.\n",
+				progname);
+		exit(1);
+	}
+#endif
 
 	/*
 	 * Connect to remote server
