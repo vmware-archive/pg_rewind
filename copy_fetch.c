@@ -49,6 +49,9 @@ traverse_datadir(const char *datadir, process_file_callback_t callback)
 
 /*
  * recursive part of traverse_datadir
+ *
+ * parent_path is the current subdirectory's path relative to datadir,
+ * or NULL at the top level.
  */
 static void
 recurse_dir(const char *datadir, const char *parentpath,
@@ -134,9 +137,11 @@ recurse_dir(const char *datadir, const char *parentpath,
 
 			/*
 			 * If it's a symlink within pg_tblspc, we need to recurse into it,
-			 * to process all the tablespaces.
+			 * to process all the tablespaces.  We also follow a symlink if
+			 * it's for pg_xlog.  Symlinks elsewhere are ignored.
 			 */
-			if (strcmp(parentpath, "pg_tblspc") == 0)
+			if ((parentpath && strcmp(parentpath, "pg_tblspc") == 0) ||
+				strcmp(path, "pg_xlog") == 0)
 				recurse_dir(datadir, path, callback);
 		}
 	}
