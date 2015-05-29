@@ -116,22 +116,22 @@ recurse_dir(const char *datadir, const char *parentpath,
 		else if (S_ISLNK(fst.st_mode))
 		{
 			char		link_target[MAXPGPATH];
-			ssize_t		len;
+			int			len;
 
-			len = readlink(fullpath, link_target, sizeof(link_target) - 1);
-			if (len == -1)
+			len = readlink(fullpath, link_target, sizeof(link_target));
+			if (len < 0)
 			{
 				fprintf(stderr, "readlink() failed on \"%s\": %s\n",
 						fullpath, strerror(errno));
 				exit(1);
 			}
-			if (len == sizeof(link_target) - 1)
+			if (len >= sizeof(link_target))
 			{
-				/* path was truncated */
 				fprintf(stderr, "symbolic link \"%s\" target path too long\n",
 						fullpath);
 				exit(1);
 			}
+			link_target[len] = '\0';
 
 			callback(path, FILE_TYPE_SYMLINK, 0, link_target);
 
