@@ -97,6 +97,10 @@ process_remote_file(const char *path, file_type_t type, size_t newsize,
 	if (strstr(path, "/" PG_TEMP_FILES_DIR "/") != NULL)
 		return;
 
+	/* Skip ephemeral WAL segments of pg_xlog */
+	if (strstr(path, "/xlogtemp") != NULL)
+		return;
+
 	/*
 	 * sanity check: a filename that looks like a data file better be a
 	 * regular file
