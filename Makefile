@@ -16,6 +16,9 @@ REGRESS_OPTS=--use-existing --launcher=./launcher
 PG_CPPFLAGS = -I$(libpq_srcdir)
 PG_LIBS = $(libpq_pgport)
 
+# Server-side support functions
+MODULES = pg_rewind_support
+
 override CPPFLAGS := -DFRONTEND $(CPPFLAGS)
 
 EXTRA_CLEAN = $(RMGRDESCSOURCES) xlogreader.c
