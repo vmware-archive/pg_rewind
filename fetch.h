@@ -29,6 +29,8 @@ extern void executeFileMap(void);
 
 /* in libpq_fetch.c */
 extern void libpqConnect(const char *connstr);
+extern void libpqInitSupport(void);
+extern void libpqFinishSupport(void);
 extern void libpqProcessFileList(void);
 extern void libpq_executeFileMap(filemap_t *map);
 extern void libpqGetChangedDataPages(datapagemap_t *pagemap);

@@ -262,6 +262,14 @@ main(int argc, char **argv)
 		   chkpttli);
 
 	/*
+	 * Install necessary functions of pg_rewind_support before fetching
+	 * the remote file list if a running source server is used for the
+	 * rewind operation.
+	 */
+	if (connstr_source)
+		libpqInitSupport();
+
+	/*
 	 * Build the filemap, by comparing the remote and local data directories
 	 */
 	(void) filemap_create();
@@ -298,6 +306,12 @@ main(int argc, char **argv)
 
 	printf("Done!\n");
 
+	/*
+	 * At this point we are basically completely done, so remove the support
+	 * bundle from source server if needed.
+	 */
+	if (connstr_source)
+		libpqFinishSupport();
 	return 0;
 }
 
