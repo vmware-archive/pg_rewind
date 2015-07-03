@@ -32,6 +32,104 @@ static PGconn *conn = NULL;
 
 static void receiveFileChunks(const char *sql);
 static void execute_pagemap(datapagemap_t *pagemap, const char *path);
+static void execute_query_or_die(const char *fmt,...)
+__attribute__((format(PG_PRINTF_ATTRIBUTE, 1, 2)));
+
+/* variables associated with support bundle */
+#define PG_REWIND_SUPPORT_LIB		"$libdir/pg_rewind_support"
+#define PG_REWIND_SUPPORT_SCHEMA	"rewind_support"
+
+/*
+ * execute_query_or_die
+ *
+ * Formats a query string from the given arguments and executes the
+ * resulting query.  If the query fails, this function logs an error
+ * message and calls exit() to kill the program.
+ */
+static void
+execute_query_or_die(const char *fmt,...)
+{
+	static char command[8192];
+	va_list     args;
+	PGresult   *result;
+	ExecStatusType status;
+
+	Assert(conn != NULL);
+
+	va_start(args, fmt);
+	vsnprintf(command, sizeof(command), fmt, args);
+	va_end(args);
+
+	result = PQexec(conn, command);
+	status = PQresultStatus(result);
+
+	if ((status != PGRES_TUPLES_OK) && (status != PGRES_COMMAND_OK))
+	{
+		fprintf(stderr, "SQL command failed\n%s\n%s\n", command,
+			   PQerrorMessage(conn));
+		PQclear(result);
+		PQfinish(conn);
+		printf("Failure, exiting\n");
+		exit(1);
+	}
+
+	PQclear(result);
+}
+
+void
+libpqInitSupport(void)
+{
+	Assert(conn != NULL);
+
+	/* suppress NOTICE of dropped objects */
+	execute_query_or_die("SET client_min_messages = warning;");
+	execute_query_or_die("DROP SCHEMA IF EXISTS %s CASCADE;",
+						 PG_REWIND_SUPPORT_SCHEMA);
+	execute_query_or_die("SET client_min_messages = warning;");
+	execute_query_or_die("CREATE SCHEMA %s", PG_REWIND_SUPPORT_SCHEMA);
+
+	/* Create functions needed */
+	execute_query_or_die("CREATE OR REPLACE FUNCTION "
+						 "%s.rewind_support_ls_dir(text, boolean) "
+						 "RETURNS SETOF text "
+						 "AS '%s' "
+						 "LANGUAGE C STRICT;",
+						 PG_REWIND_SUPPORT_SCHEMA,
+						 PG_REWIND_SUPPORT_LIB);
+	execute_query_or_die("CREATE OR REPLACE FUNCTION "
+						 "%s.rewind_support_read_binary_file(text, "
+						 "bigint, bigint, boolean) "
+						 "RETURNS bytea "
+						 "AS '%s' "
+						 "LANGUAGE C STRICT;",
+						 PG_REWIND_SUPPORT_SCHEMA,
+						 PG_REWIND_SUPPORT_LIB);
+	execute_query_or_die("CREATE OR REPLACE FUNCTION "
+						 "%s.rewind_support_stat_file( "
+						 "IN filename text, "
+						 "IN missing_ok boolean, "
+						 "OUT size bigint, "
+						 "OUT access timestamp with time zone, "
+						 "OUT modification timestamp with time zone, "
+						 "OUT change timestamp with time zone, "
+						 "OUT creation timestamp with time zone, "
+						 "OUT isdir boolean) "
+						 "RETURNS record "
+						 "AS '%s' "
+						 "LANGUAGE C STRICT;",
+						 PG_REWIND_SUPPORT_SCHEMA,
+						 PG_REWIND_SUPPORT_LIB);
+}
+
+void
+libpqFinishSupport(void)
+{
+	Assert(conn != NULL);
+	/* Suppress NOTICE of dropped objects */
+	execute_query_or_die("SET client_min_messages = warning;");
+	execute_query_or_die("DROP SCHEMA %s CASCADE;", PG_REWIND_SUPPORT_SCHEMA);
+	execute_query_or_die("RESET client_min_messages;");
+}
 
 void
 libpqConnect(const char *connstr)
@@ -55,35 +153,40 @@ void
 libpqProcessFileList(void)
 {
 	PGresult   *res;
-	const char *sql;
+	char		sql[2048];
 	int			i;
 
-	sql =
-		"-- Create a recursive directory listing of the whole data directory\n"
+	/*
+	 * Create a recursive directory listing of the whole data directory.
+	 * Using the cte, fetch a listing of the all the files.
+	 * For tablespaces, use pg_tablespace_location() function to fetch
+	 * the link target (there is no backend function to get a symbolic
+	 * link's target in general, so if the admin has put any custom
+	 * symbolic links in the data directory, they won't be copied
+	 * correctly).
+	 */
+	snprintf(sql, sizeof(sql),
 		"with recursive files (path, filename, size, isdir) as (\n"
 		"  select '' as path, filename, size, isdir from\n"
-		"  (select pg_ls_dir('.') as filename) as fn,\n"
-		"        pg_stat_file(fn.filename) as this\n"
+		"  (select %s.rewind_support_ls_dir('.', true) as filename) as fn,\n"
+		"        %s.rewind_support_stat_file(fn.filename, true) as this\n"
 		"  union all\n"
 		"  select parent.path || parent.filename || '/' as path,\n"
 		"         fn, this.size, this.isdir\n"
 		"  from files as parent,\n"
-		"       pg_ls_dir(parent.path || parent.filename) as fn,\n"
-		"       pg_stat_file(parent.path || parent.filename || '/' || fn) as this\n"
+		"       %s.rewind_support_ls_dir(parent.path || parent.filename, true) as fn,\n"
+		"       %s.rewind_support_stat_file(parent.path || parent.filename || '/' || fn, true) as this\n"
 		"       where parent.isdir = 't'\n"
 		")\n"
-		"-- Using the cte, fetch a listing of the all the files.\n"
-		"--\n"
-		"-- For tablespaces, use pg_tablespace_location() function to fetch\n"
-		"-- the link target (there is no backend function to get a symbolic\n"
-		"-- link's target in general, so if the admin has put any custom\n"
-		"-- symbolic links in the data directory, they won't be copied\n"
-		"-- correctly)\n"
 		"select path || filename, size, isdir,\n"
 		"       pg_tablespace_location(pg_tablespace.oid) as link_target\n"
 		"from files\n"
 		"left outer join pg_tablespace on files.path = 'pg_tblspc/'\n"
-		"                             and oid::text = files.filename\n";
+		"                             and oid::text = files.filename\n",
+			 PG_REWIND_SUPPORT_SCHEMA,
+			 PG_REWIND_SUPPORT_SCHEMA,
+			 PG_REWIND_SUPPORT_SCHEMA,
+			 PG_REWIND_SUPPORT_SCHEMA);
 	res = PQexec(conn, sql);
 
 	if (PQresultStatus(res) != PGRES_TUPLES_OK)
@@ -108,6 +211,15 @@ libpqProcessFileList(void)
 		bool		isdir = (strcmp(PQgetvalue(res, i, 2), "t") == 0);
 		char	   *link_target = PQgetvalue(res, i, 3);
 		file_type_t type;
+
+		if (PQgetisnull(res, 0, 1))
+		{
+			/*
+			 * The file was removed from the server while the query was
+			 * running. Ignore it.
+			 */
+			continue;
+		}
 
 		if (link_target[0])
 			type = FILE_TYPE_SYMLINK;
@@ -192,22 +304,38 @@ receiveFileChunks(const char *sql)
 			exit(1);
 		}
 
-		if (!(!PQgetisnull(res, 0, 0) && !PQgetisnull(res, 0, 1) && !PQgetisnull(res, 0, 2) &&
+		if (!(!PQgetisnull(res, 0, 0) &&
+			  !PQgetisnull(res, 0, 1) &&
 			  PQgetlength(res, 0, 1) == sizeof(int32)))
 		{
 			fprintf(stderr, "unexpected result set while fetching remote files\n");
 			exit(1);
 		}
 
-		/* Read result set to local variables */
-		memcpy(&chunkoff, PQgetvalue(res, 0, 1), sizeof(int32));
-		chunkoff = ntohl(chunkoff);
-		chunksize = PQgetlength(res, 0, 2);
-
 		filenamelen = PQgetlength(res, 0, 0);
 		filename = pg_malloc(filenamelen + 1);
 		memcpy(filename, PQgetvalue(res, 0, 0), filenamelen);
 		filename[filenamelen] = '\0';
+
+		/*
+		 * It's possible that the file was deleted on remote side after we
+		 * created the file map. In this case simply ignore it, as if it was
+		 * not there in the first place, and move on.
+		 */
+		if (PQgetisnull(res, 0, 2))
+		{
+			fprintf(stderr,
+				"received NULL chunk for file \"%s\", file has been deleted\n",
+				filename);
+			pg_free(filename);
+			PQclear(res);
+			continue;
+		}
+
+		/* Read result set to local variables */
+		memcpy(&chunkoff, PQgetvalue(res, 0, 1), sizeof(int32));
+		chunkoff = ntohl(chunkoff);
+		chunksize = PQgetlength(res, 0, 2);
 
 		chunk = PQgetvalue(res, 0, 2);
 
@@ -300,7 +428,7 @@ void
 libpq_executeFileMap(filemap_t *map)
 {
 	file_entry_t *entry;
-	const char *sql;
+	char		sql[1024];
 	PGresult   *res;
 	int			i;
 
@@ -308,7 +436,8 @@ libpq_executeFileMap(filemap_t *map)
 	 * First create a temporary table, and load it with the blocks that
 	 * we need to fetch.
 	 */
-	sql = "create temporary table fetchchunks(path text, begin int4, len int4);";
+	snprintf(sql, sizeof(sql),
+		"create temporary table fetchchunks(path text, begin int4, len int4);");
 	res = PQexec(conn, sql);
 
 	if (PQresultStatus(res) != PGRES_COMMAND_OK)
@@ -318,7 +447,8 @@ libpq_executeFileMap(filemap_t *map)
 		exit(1);
 	}
 
-	sql = "copy fetchchunks from stdin";
+	snprintf(sql, sizeof(sql),
+			 "copy fetchchunks from stdin");
 	res = PQexec(conn, sql);
 
 	if (PQresultStatus(res) != PGRES_COPY_IN)
@@ -381,11 +511,11 @@ libpq_executeFileMap(filemap_t *map)
 	}
 
 	/* Ok, we've sent the file list. Now receive the files */
-	sql =
+	snprintf(sql, sizeof(sql),
 		"-- fetch all the blocks listed in the temp table.\n"
 		"select path, begin, \n"
-		"  pg_read_binary_file(path, begin, len) as chunk\n"
-		"from fetchchunks\n";
+		"%s.rewind_support_read_binary_file(path, begin, len, true) as chunk\n"
+		"from fetchchunks\n", PG_REWIND_SUPPORT_SCHEMA);
 
 	receiveFileChunks(sql);
 }
