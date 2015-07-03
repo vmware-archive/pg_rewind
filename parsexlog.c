@@ -53,11 +53,12 @@ static int SimpleXLogPageRead(XLogReaderState *xlogreader,
 
 /*
  * Read all the WAL in the datadir/pg_xlog,  starting from 'startpoint' on
- * timeline 'tli'. Make note of the data blocks touched by the WAL records,
- * and return them in a page map.
+ * timeline 'tli' until 'endpoint'. Make note of the data blocks touched by
+ * the WAL records, and return them in a page map.
  */
 void
-extractPageMap(const char *datadir, XLogRecPtr startpoint, TimeLineID tli)
+extractPageMap(const char *datadir, XLogRecPtr startpoint, TimeLineID tli,
+			   XLogRecPtr endpoint)
 {
 	XLogRecord *record;
 	XLogReaderState *xlogreader;
@@ -67,28 +68,41 @@ extractPageMap(const char *datadir, XLogRecPtr startpoint, TimeLineID tli)
 	private.datadir = datadir;
 	private.tli = tli;
 	xlogreader = XLogReaderAllocate(&SimpleXLogPageRead, &private);
-
-	record = XLogReadRecord(xlogreader, startpoint, &errormsg);
-	if (record == NULL)
+	if (xlogreader == NULL)
 	{
-		fprintf(stderr, "could not read WAL starting at %X/%X",
-				(uint32) (startpoint >> 32),
-				(uint32) (startpoint));
-		if (errormsg)
-			fprintf(stderr, ": %s", errormsg);
-		fprintf(stderr, "\n");
+		fprintf(stderr, "out of memory\n");
 		exit(1);
 	}
 
+	record = XLogReadRecord(xlogreader, startpoint, &errormsg);
 	do
 	{
+		record = XLogReadRecord(xlogreader, startpoint, &errormsg);
+
+		if (record == NULL)
+		{
+			XLogRecPtr	errptr;
+
+			errptr = startpoint ? startpoint : xlogreader->EndRecPtr;
+
+			if (errormsg)
+				fprintf(stderr,
+						"could not read WAL record at %X/%X: %s\n",
+						(uint32) (errptr >> 32), (uint32) (errptr),
+						errormsg);
+			else
+				fprintf(stderr,
+						"could not read WAL record at %X/%X\n",
+						(uint32) (startpoint >> 32),
+						(uint32) (startpoint));
+			exit(1);
+		}
+
 		extractPageInfo(record);
 
-		record = XLogReadRecord(xlogreader, InvalidXLogRecPtr, &errormsg);
+		startpoint = InvalidXLogRecPtr; /* continue reading at next record */
 
-		if (errormsg)
-			fprintf(stderr, "error reading xlog record: %s\n", errormsg);
-	} while(record != NULL);
+	} while (xlogreader->ReadRecPtr != endpoint);
 
 	XLogReaderFree(xlogreader);
 	if (xlogreadfd != -1)

@@ -276,12 +276,14 @@ main(int argc, char **argv)
 	traverse_datadir(datadir_target, &process_local_file);
 
 	/*
-	 * Read the target WAL from last checkpoint before the point of fork,
-	 * to extract all the pages that were modified on the target cluster
-	 * after the fork.
+	 * Read the target WAL from last checkpoint before the point of fork, to
+	 * extract all the pages that were modified on the target cluster after
+	 * the fork. We can stop reading after reaching the final shutdown record.
+	 * XXX: If we supported rewinding a server that was not shut down cleanly,
+	 * we would need to replay until the end of WAL here.
 	 */
-	extractPageMap(datadir_target, chkptrec, lastcommontli);
-
+	extractPageMap(datadir_target, chkptrec, lastcommontli,
+				   ControlFile_target.checkPoint);
 	filemap_finalize();
 
 	/* XXX: this is probably too verbose even in verbose mode */

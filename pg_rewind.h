@@ -32,7 +32,8 @@ extern int dry_run;
 
 
 /* in parsexlog.c */
-extern void extractPageMap(const char *datadir, XLogRecPtr startpoint, TimeLineID tli);
+extern void extractPageMap(const char *datadir, XLogRecPtr startpoint,
+						   TimeLineID tli, XLogRecPtr endpoint);
 extern void findLastCheckpoint(const char *datadir, XLogRecPtr searchptr, TimeLineID tli,
 				   XLogRecPtr *lastchkptrec, TimeLineID *lastchkpttli,
 				   XLogRecPtr *lastchkptredo);
