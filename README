@@ -14,6 +14,6 @@ Note: As pg_rewind has been included in PostgreSQL 9.5, new major releases
 of pg_rewind will not be included in this repository. This means that master
 branch is now inactive.
 
-For those reason this branch is actually empty of content and will not be
+For those reasons, this branch is actually empty of content and will not be
 updated anymore. For versions compatible with PostgreSQL 9.3 and 9.4, please
 refer to branches REL9_3_STABLE and REL9_4_STABLE respectively.
