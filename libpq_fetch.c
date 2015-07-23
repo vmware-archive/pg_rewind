@@ -281,6 +281,7 @@ receiveFileChunks(const char *sql)
 				break;
 
 			case PGRES_TUPLES_OK:
+				PQclear(res);
 				continue; /* final zero-row result */
 			default:
 				fprintf(stderr, "unexpected result while fetching remote files: %s\n",
@@ -348,6 +349,9 @@ receiveFileChunks(const char *sql)
 		open_target_file(filename, false);
 
 		write_file_range(chunk, chunkoff, chunksize);
+
+		pg_free(filename);
+		PQclear(res);
 	}
 }
 
@@ -449,6 +453,7 @@ libpq_executeFileMap(filemap_t *map)
 				PQresultErrorMessage(res));
 		exit(1);
 	}
+	PQclear(res);
 
 	snprintf(sql, sizeof(sql),
 			 "copy fetchchunks from stdin");
