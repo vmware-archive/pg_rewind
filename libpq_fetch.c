@@ -230,6 +230,8 @@ libpqProcessFileList(void)
 
 		process_remote_file(path, type, filesize, link_target);
 	}
+
+	PQclear(res);
 }
 
 /*
@@ -391,6 +393,7 @@ libpqGetFile(const char *filename, size_t *filesize)
 
 	if (filesize)
 		*filesize = len;
+	PQclear(res);
 	return result;
 }
 
@@ -509,6 +512,8 @@ libpq_executeFileMap(filemap_t *map)
 			exit(1);
 		}
 	}
+
+	PQclear(res);
 
 	/* Ok, we've sent the file list. Now receive the files */
 	snprintf(sql, sizeof(sql),

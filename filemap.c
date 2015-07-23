@@ -534,6 +534,7 @@ isRelDataFile(const char *path)
 					errmsg);
 			exit(1);
 		}
+		regexps_compiled = true;
 	}
 
 	rc = regexec(&datasegment_regex, path, 0, NULL, 0);
