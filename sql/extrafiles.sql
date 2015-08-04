@@ -12,6 +12,12 @@ TESTNAME=extrafiles
 
 . sql/config_test.sh
 
+# Nothing to do here
+function before_master
+{
+  :
+}
+
 # Create a subdir that will be present in both
 function before_standby
 {

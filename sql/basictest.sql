@@ -10,6 +10,12 @@ TESTNAME=basictest
 
 . sql/config_test.sh
 
+# Nothing to do here
+function before_master
+{
+:
+}
+
 # Do an insert in master.
 function before_standby
 {
