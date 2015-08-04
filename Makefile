@@ -10,6 +10,8 @@ PROGRAM = pg_rewind
 OBJS	= pg_rewind.o parsexlog.o xlogreader.o util.o datapagemap.o timeline.o \
 	fetch.o copy_fetch.o libpq_fetch.o filemap.o
 
+man_DOC = pg_rewind.1
+
 REGRESS = basictest extrafiles databases pg_xlog_symlink
 REGRESS_OPTS=--use-existing --launcher=./launcher
 
@@ -66,3 +68,12 @@ check-remote:
 	bindir=$(bindir) TEST_SUITE="remote" $(MAKE) installcheck
 
 check-both: check-local check-remote
+
+install: install-man
+install-man:
+	$(MKDIR_P) '$(DESTDIR)$(mandir)/man1'
+	$(INSTALL_DATA) $(man_DOC) '$(DESTDIR)$(mandir)/man1'
+
+uninstall: uninstall-man
+uninstall-man:
+	rm -f  '$(DESTDIR)$(mandir)/man1'/$(man_DOC)
