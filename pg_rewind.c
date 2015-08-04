@@ -62,7 +62,7 @@ usage(const char *progname)
 	printf("                 source data directory to sync with\n");
 	printf("  --source-server=CONNSTR\n");
 	printf("                 source server to sync with\n");
-	printf("  -v             write a lot of progress messages\n");
+	printf("  -v, --verbose  write a lot of progress messages\n");
 	printf("  -n, --dry-run  stop before modifying anything\n");
 	printf("  -V, --version  output version information, then exit\n");
 	printf("  -?, --help     show this help, then exit\n");
