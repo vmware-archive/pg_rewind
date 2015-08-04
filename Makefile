@@ -10,7 +10,7 @@ PROGRAM = pg_rewind
 OBJS	= pg_rewind.o parsexlog.o xlogreader.o util.o datapagemap.o timeline.o \
 	fetch.o copy_fetch.o libpq_fetch.o filemap.o
 
-REGRESS = basictest extrafiles databases
+REGRESS = basictest extrafiles databases pg_xlog_symlink
 REGRESS_OPTS=--use-existing --launcher=./launcher
 
 PG_CPPFLAGS = -I$(libpq_srcdir)
