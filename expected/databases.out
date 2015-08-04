@@ -1,4 +1,5 @@
-Master initialized and running.
+Master initialized.
+Master running.
 CREATE DATABASE inmaster;
 CREATE DATABASE
 Standby initialized and running.

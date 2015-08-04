@@ -14,7 +14,8 @@
 # Before running this script, the calling script should've included
 # config_test.sh, and defined four functions to define the test case:
 #
-#  before_standby  - runs after initializing the master, before creating the
+#  before_master   - runs after initializing the master, before starting it
+#  before_standby  - runs after starting the master, before creating the
 #                    standby
 #  standby_following_master - runs after standby has been created and started
 #  after_promotion - runs after standby has been promoted, but old master is
@@ -53,11 +54,14 @@ host replication all 127.0.0.1/32 trust
 host replication all ::1/128 trust
 EOF
 
+#### Now run the test-specific parts to initialize the master before setting
+echo "Master initialized."
+before_master
+
 pg_ctl -w -D $TEST_MASTER start >>$log_path 2>&1
 
-#### Now run the test-specific parts to initialize the master before setting
 # up standby
-echo "Master initialized and running."
+echo "Master running."
 before_standby
 
 # Set up standby with necessary parameter

@@ -1,4 +1,5 @@
-Master initialized and running.
+Master initialized.
+Master running.
 CREATE TABLE tbl1 (d text);
 CREATE TABLE
 INSERT INTO tbl1 VALUES ('in master');

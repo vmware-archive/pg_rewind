@@ -1,4 +1,5 @@
-Master initialized and running.
+Master initialized.
+Master running.
 Standby initialized and running.
 Standby promoted.
 Running pg_rewind...
