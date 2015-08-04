@@ -1,0 +1,181 @@
+'\" t
+.\"     Title: pg_rewind
+.\"    Author: The PostgreSQL Global Development Group
+.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
+.\"      Date: 2015
+.\"    Manual: \ \&
+.\"    Source: \ \&
+.\"  Language: English
+.\"
+.TH "PG_REWIND" "1" "2015" "\ \&" "\ \&"
+.\" -----------------------------------------------------------------
+.\" * Define some portability stuff
+.\" -----------------------------------------------------------------
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.\" http://bugs.debian.org/507673
+.\" http://lists.gnu.org/archive/html/groff/2009-02/msg00013.html
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.ie \n(.g .ds Aq \(aq
+.el       .ds Aq '
+.\" -----------------------------------------------------------------
+.\" * set default formatting
+.\" -----------------------------------------------------------------
+.\" disable hyphenation
+.nh
+.\" disable justification (adjust text to left margin only)
+.ad l
+.\" -----------------------------------------------------------------
+.\" * MAIN CONTENT STARTS HERE *
+.\" -----------------------------------------------------------------
+.SH "NAME"
+pg_rewind \- synchronize a PostgreSQL data directory with another data directory that was forked from the first one
+.SH "SYNOPSIS"
+.HP \w'\fBpg_rewind\fR\ 'u
+\fBpg_rewind\fR [\fIoption\fR...] {\fB\-D\ \fR | \fB\-\-target\-pgdata\fR}\fI directory\fR {\fB\-\-source\-pgdata=\fR\fB\fIdirectory\fR\fR | \fB\-\-source\-server=\fR\fB\fIconnstr\fR\fR}
+.SH "DESCRIPTION"
+.PP
+pg_rewind
+is a tool for synchronizing a PostgreSQL cluster with another copy of the same cluster, after the clusters\*(Aq timelines have diverged\&. A typical scenario is to bring an old master server back online after failover, as a standby that follows the new master\&.
+.PP
+The result is equivalent to replacing the target data directory with the source one\&. All files are copied, including configuration files\&. The advantage of
+pg_rewind
+over taking a new base backup, or tools like
+rsync, is that
+pg_rewind
+does not require reading through all unchanged files in the cluster\&. That makes it a lot faster when the database is large and only a small portion of it differs between the clusters\&.
+.PP
+pg_rewind
+examines the timeline histories of the source and target clusters to determine the point where they diverged, and expects to find WAL in the target cluster\*(Aqs
+pg_xlog
+directory reaching all the way back to the point of divergence\&. In the typical failover scenario where the target cluster was shut down soon after the divergence, that is not a problem, but if the target cluster had run for a long time after the divergence, the old WAL files might not be present anymore\&. In that case, they can be manually copied from the WAL archive to the
+pg_xlog
+directory\&. Fetching missing files from a WAL archive automatically is currently not supported\&.
+.PP
+When the target server is started up for the first time after running
+pg_rewind, it will go into recovery mode and replay all WAL generated in the source server after the point of divergence\&. If some of the WAL was no longer available in the source server when
+pg_rewind
+was run, and therefore could not be copied by
+pg_rewind
+session, it needs to be made available when the target server is started up\&. That can be done by creating a
+recovery\&.conf
+file in the target data directory with a suitable
+\fIrestore_command\fR\&.
+.SH "OPTIONS"
+.PP
+pg_rewind
+accepts the following command\-line arguments:
+.PP
+\fB\-D \fR\fB\fIdirectory\fR\fR
+.br
+\fB\-\-target\-pgdata=\fR\fB\fIdirectory\fR\fR
+.RS 4
+This option specifies the target data directory that is synchronized with the source\&. The target server must shut down cleanly before running
+pg_rewind
+.RE
+.PP
+\fB\-\-source\-pgdata=\fR\fB\fIdirectory\fR\fR
+.RS 4
+Specifies path to the data directory of the source server, to synchronize the target with\&. When
+\fB\-\-source\-pgdata\fR
+is used, the source server must be cleanly shut down\&.
+.RE
+.PP
+\fB\-\-source\-server=\fR\fB\fIconnstr\fR\fR
+.RS 4
+Specifies a libpq connection string to connect to the source
+PostgreSQL
+server to synchronize the target with\&. The server must be up and running, and must not be in recovery mode\&.
+.RE
+.PP
+\fB\-n\fR
+.br
+\fB\-\-dry\-run\fR
+.RS 4
+Do everything except actually modifying the target directory\&.
+.RE
+.PP
+\fB\-v\fR
+.br
+\fB\-\-verbose\fR
+.RS 4
+Enables verbose reporting\&. Turning this on will deliver an approximate progress report while copying data over from the source cluster\&.
+.RE
+.PP
+\fB\-V\fR
+.br
+\fB\-\-version\fR
+.RS 4
+Display version information, then exit
+.RE
+.PP
+\fB\-?\fR
+.br
+\fB\-\-help\fR
+.RS 4
+Show help, then exit
+.RE
+.SH "ENVIRONMENT"
+.PP
+When
+\fB\-\-source\-server\fR
+option is used,
+pg_rewind
+also uses the environment variables supported by libpq.
+.SH "NOTES"
+.PP
+pg_rewind
+requires that data checksums were enabled when the cluster was initialized with
+initdb\&.
+\fIfull_page_writes\fR
+must also be enabled\&.
+.SS "How it works"
+.PP
+The basic idea is to copy everything from the new cluster to the old cluster, except for the blocks that we know to be the same\&.
+.sp
+.RS 4
+.ie n \{\
+\h'-04' 1.\h'+01'\c
+.\}
+.el \{\
+.sp -1
+.IP "  1." 4.2
+.\}
+Scan the WAL log of the old cluster, starting from the last checkpoint before the point where the new cluster\*(Aqs timeline history forked off from the old cluster\&. For each WAL record, make a note of the data blocks that were touched\&. This yields a list of all the data blocks that were changed in the old cluster, after the new cluster forked off\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04' 2.\h'+01'\c
+.\}
+.el \{\
+.sp -1
+.IP "  2." 4.2
+.\}
+Copy all those changed blocks from the new cluster to the old cluster\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04' 3.\h'+01'\c
+.\}
+.el \{\
+.sp -1
+.IP "  3." 4.2
+.\}
+Copy all other files like clog, conf files etc\&. from the new cluster to old cluster\&. Everything except the relation files\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04' 4.\h'+01'\c
+.\}
+.el \{\
+.sp -1
+.IP "  4." 4.2
+.\}
+Apply the WAL from the new cluster, starting from the checkpoint created at failover\&. (Strictly speaking,
+pg_rewind
+doesn\*(Aqt apply the WAL, it just creates a backup label file indicating that when
+PostgreSQL
+is started, it will start replay from that checkpoint and apply all the required WAL\&.)
+.RE
