@@ -21,7 +21,7 @@
 #include "storage/block.h"
 #include "storage/relfilenode.h"
 
-#define PG_REWIND_VERSION "0.1"
+#define PG_REWIND_VERSION "1.0.0"
 
 /* Configuration options */
 extern char *datadir_target;
