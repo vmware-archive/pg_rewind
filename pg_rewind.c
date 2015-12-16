@@ -212,7 +212,8 @@ main(int argc, char **argv)
 	if (ControlFile_target.checkPointCopy.ThisTimeLineID == ControlFile_source.checkPointCopy.ThisTimeLineID)
 	{
 		fprintf(stderr, "source and target cluster are both on the same timeline.\n");
-		exit(1);
+		printf("No rewind required.\n");
+		exit(0);
 	}
 
 	findCommonAncestorTimeline(&divergerec, &lastcommontli);
@@ -353,9 +354,23 @@ sanityChecks(void)
 	 * than necessary; it's OK if the master was not shut down cleanly, as
 	 * long as it isn't running at the moment.
 	 */
-	if (ControlFile_target.state != DB_SHUTDOWNED)
+	if (ControlFile_target.state != DB_SHUTDOWNED &&
+		ControlFile_target.state != DB_SHUTDOWNED_IN_RECOVERY)
 	{
 		fprintf(stderr, "target master must be shut down cleanly.\n");
+		exit(1);
+	}
+
+    /*
+     * When the source is a data directory, also require that the source
+     * server is shut down. There isn't any very strong reason for this
+     * limitation, but better safe than sorry.
+     */
+	if (datadir_source &&
+		ControlFile_source.state != DB_SHUTDOWNED &&
+		ControlFile_source.state != DB_SHUTDOWNED_IN_RECOVERY)
+	{
+		fprintf(stderr, "source data directory must be shut down cleanly.\n");
 		exit(1);
 	}
 }

@@ -100,6 +100,11 @@ after_promotion
 # Stop the master and be ready to perform the rewind
 pg_ctl -w -D $TEST_MASTER stop -m fast >>$log_path 2>&1
 
+# For a local test, source node need to be stopped as well.
+if [ $TEST_SUITE == "local" ]; then
+	pg_ctl -w -D $TEST_STANDBY stop -m fast >>$log_path 2>&1
+fi
+
 # At this point, the rewind processing is ready to run.
 # We now have a very simple scenario with a few diverged WAL record.
 # The real testing begins really now with a bifurcation of the possible
@@ -126,6 +131,11 @@ else
 	# Cannot come here normally
 	echo "Incorrect test suite specified"
 	exit 1
+fi
+
+# After rewind is done, restart the source node in local mode.
+if [ $TEST_SUITE == "local" ]; then
+	pg_ctl -w -D $TEST_STANDBY start >>$log_path 2>&1
 fi
 
 # Now move back postgresql.conf with old settings
