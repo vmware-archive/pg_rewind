@@ -35,6 +35,7 @@ static void createBackupLabel(XLogRecPtr startpoint, TimeLineID starttli,
 static void digestControlFile(ControlFileData *ControlFile, char *source, size_t size);
 static void updateControlFile(ControlFileData *ControlFile,
 							  char *datadir);
+static void syncTargetDirectory(const char *argv0);
 static void sanityChecks(void);
 static void findCommonAncestorTimeline(XLogRecPtr *recptr, TimeLineID *tli);
 
@@ -306,6 +307,8 @@ main(int argc, char **argv)
 	ControlFile.minRecoveryPointTLI = ControlFile_target.checkPointCopy.ThisTimeLineID;
 	ControlFile.state = DB_IN_ARCHIVE_RECOVERY;
 	updateControlFile(&ControlFile, datadir_target);
+
+	syncTargetDirectory(argv[0]);
 
 	printf("Done!\n");
 
@@ -587,4 +590,63 @@ updateControlFile(ControlFileData *ControlFile, char *datadir)
 		fprintf(stderr,"Could not close the pg_control file\n");
 		exit(1);
 	}
- }
+}
+
+/*
+ * Sync data directory to ensure that what has been generated up to now is
+ * persistent in case of a crash, and this is done once globally for
+ * performance reasons as sync requests on individual files would be
+ * a negative impact on the running time of pg_rewind. This is invoked at
+ * the end of processing once everything has been processed and written.
+ */
+static void
+syncTargetDirectory(const char *argv0)
+{
+	int		ret;
+	char	exec_path[MAXPGPATH];
+	char	cmd[MAXPGPATH];
+
+	if (dry_run)
+		return;
+
+	if (verbose)
+		fprintf(stderr, "syncing target data directory via initdb -S\n");
+
+	/* Grab and invoke initdb to perform the sync */
+	if ((ret = find_other_exec(argv0, "initdb",
+							   "initdb (PostgreSQL) " PG_VERSION "\n",
+							   exec_path)) < 0)
+	{
+		char	full_path[MAXPGPATH];
+
+		if (find_my_exec(argv0, full_path) < 0)
+			strlcpy(full_path, progname, sizeof(full_path));
+
+		if (ret == -1)
+			fprintf(stderr, "The program \"initdb\" is needed by %s but was \n"
+					"not found in the same directory as \"%s\".\n"
+					"Check your installation.\n", progname, full_path);
+		else
+			fprintf(stderr, "The program \"postgres\" was found by \"%s\" \n"
+					"but was not the same version as %s.\n"
+					"Check your installation.\n", progname, full_path);
+		exit(1);
+	}
+
+	/* now run initdb */
+	if (verbose)
+		snprintf(cmd, MAXPGPATH, "\"%s\" -D \"%s\" -S",
+				 exec_path, datadir_target);
+	else
+		snprintf(cmd, MAXPGPATH, "\"%s\" -D \"%s\" -S > \"%s\"",
+				 exec_path, datadir_target, DEVNULL);
+
+	if (system(cmd) != 0)
+	{
+		fprintf(stderr, "sync of target directory with initdb -S failed\n");
+		exit(1);
+	}
+
+	if (verbose)
+		fprintf(stderr, "sync of target directory with initdb -S done\n");
+}
