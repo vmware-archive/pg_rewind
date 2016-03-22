@@ -191,7 +191,8 @@ close_target_file(void)
 	}
 
 	dstfd = -1;
-	/* fsync? */
+
+	/* fsync is done globally at the end of processing */
 }
 
 void
