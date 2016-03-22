@@ -69,7 +69,7 @@ execute_query_or_die(const char *fmt,...)
 			   PQerrorMessage(conn));
 		PQclear(result);
 		PQfinish(conn);
-		printf("Failure, exiting\n");
+		fprintf(stderr, "Failure, exiting\n");
 		exit(1);
 	}
 
@@ -143,7 +143,7 @@ libpqConnect(const char *connstr)
 	}
 
 	if (verbose)
-		printf("connected to remote server\n");
+		fprintf(stderr, "connected to remote server\n");
 }
 
 /*
@@ -393,7 +393,7 @@ libpqGetFile(const char *filename, size_t *filesize)
 	result[len] = '\0';
 
 	if (verbose)
-		printf("fetched file \"%s\", length %d\n", filename, len);
+		fprintf(stderr, "fetched file \"%s\", length %d\n", filename, len);
 
 	if (filesize)
 		*filesize = len;
