@@ -17,6 +17,8 @@
 
 #include "c.h"
 
+#include "access/xlogdefs.h"
+
 #include "filemap.h"
 
 /*
@@ -36,6 +38,7 @@ extern void libpq_executeFileMap(filemap_t *map);
 extern void libpqGetChangedDataPages(datapagemap_t *pagemap);
 extern void libpqGetOtherFiles(void);
 extern char *libpqGetFile(const char *filename, size_t *filesize);
+extern XLogRecPtr libpqGetCurrentXlogInsertLocation(void);
 
 /* in copy_fetch.c */
 extern void copy_executeFileMap(filemap_t *map);

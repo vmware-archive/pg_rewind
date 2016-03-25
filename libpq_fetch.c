@@ -147,6 +147,67 @@ libpqConnect(const char *connstr)
 }
 
 /*
+ * Runs a query that returns a single value.
+ * The result should be pg_free'd after use.
+ */
+static char *
+run_simple_query(const char *sql)
+{
+	PGresult   *res;
+	char	   *result;
+
+	res = PQexec(conn, sql);
+
+	if (PQresultStatus(res) != PGRES_TUPLES_OK)
+	{
+		fprintf(stderr, "error running query (%s) in source server: %s",
+				sql, PQresultErrorMessage(res));
+		exit(1);
+	}
+
+	/* sanity check the result set */
+	if (PQnfields(res) != 1 || PQntuples(res) != 1 || PQgetisnull(res, 0, 0))
+	{
+		fprintf(stderr, "unexpected result set from query\n");
+		exit(1);
+	}
+
+	result = pg_strdup(PQgetvalue(res, 0, 0));
+
+	PQclear(res);
+
+	return result;
+}
+
+/*
+ * Calls pg_current_xlog_insert_location() function
+ */
+XLogRecPtr
+libpqGetCurrentXlogInsertLocation(void)
+{
+	XLogRecPtr	result;
+	uint32		hi;
+	uint32		lo;
+	char	   *val;
+
+	val = run_simple_query("SELECT pg_current_xlog_insert_location()");
+
+	if (sscanf(val, "%X/%X", &hi, &lo) != 2)
+	{
+		fprintf(stderr,
+				"unrecognized result \"%s\" for current WAL insert location\n",
+				val);
+		exit(1);
+	}
+
+	result = ((uint64) hi) << 32 | lo;
+
+	pg_free(val);
+
+	return result;
+}
+
+/*
  * Get a file list.
  */
 void

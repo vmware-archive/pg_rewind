@@ -95,7 +95,9 @@ main(int argc, char **argv)
 	size_t		size;
 	char	   *buffer;
 	bool		rewind_needed;
-	ControlFileData	ControlFile;
+	XLogRecPtr	endrec;
+	TimeLineID	endtli;
+	ControlFileData	ControlFile_new;
 
 	set_pglocale_pgservice(argv[0], PG_TEXTDOMAIN("pg_rewind"));
 	progname = get_progname(argv[0]);
@@ -297,15 +299,32 @@ main(int argc, char **argv)
 
 	createBackupLabel(chkptredo, chkpttli, chkptrec);
 
+	printf("creating backup label and updating control file\n");
+
 	/*
-	 * Update control file of target file and make it ready to
-	 * perform archive recovery when restarting.
+	 * Update control file of target. Make it ready to perform archive
+	 * recovery when restarting.
+	 *
+	 * minRecoveryPoint is set to the current WAL insert location in the
+	 * source server. Like in an online backup, it's important that we recover
+	 * all the WAL that was generated while we copied the files over.
 	 */
-	memcpy(&ControlFile, &ControlFile_source, sizeof(ControlFileData));
-	ControlFile.minRecoveryPoint = divergerec;
-	ControlFile.minRecoveryPointTLI = ControlFile_target.checkPointCopy.ThisTimeLineID;
-	ControlFile.state = DB_IN_ARCHIVE_RECOVERY;
-	updateControlFile(&ControlFile, datadir_target);
+	memcpy(&ControlFile_new, &ControlFile_source, sizeof(ControlFileData));
+
+	if (connstr_source)
+	{
+		endrec = libpqGetCurrentXlogInsertLocation();
+		endtli = ControlFile_source.checkPointCopy.ThisTimeLineID;
+	}
+	else
+	{
+		endrec = ControlFile_source.checkPoint;
+		endtli = ControlFile_source.checkPointCopy.ThisTimeLineID;
+	}
+	ControlFile_new.minRecoveryPoint = endrec;
+	ControlFile_new.minRecoveryPointTLI = endtli;
+	ControlFile_new.state = DB_IN_ARCHIVE_RECOVERY;
+	updateControlFile(&ControlFile_new, datadir_target);
 
 	syncTargetDirectory(argv[0]);
 
