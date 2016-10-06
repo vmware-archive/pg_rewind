@@ -34,6 +34,7 @@ static void receiveFileChunks(const char *sql);
 static void execute_pagemap(datapagemap_t *pagemap, const char *path);
 static void execute_query_or_die(const char *fmt,...)
 __attribute__((format(PG_PRINTF_ATTRIBUTE, 1, 2)));
+static char *run_simple_query(const char *sql);
 
 /* variables associated with support bundle */
 #define PG_REWIND_SUPPORT_LIB		"$libdir/pg_rewind_support"
@@ -134,6 +135,9 @@ libpqFinishSupport(void)
 void
 libpqConnect(const char *connstr)
 {
+	char	   *str;
+	PGresult   *res;
+
 	conn = PQconnectdb(connstr);
 	if (PQstatus(conn) == CONNECTION_BAD)
 	{
@@ -144,6 +148,49 @@ libpqConnect(const char *connstr)
 
 	if (verbose)
 		fprintf(stderr, "connected to remote server\n");
+
+	/*
+	 * Check that the server is not in hot standby mode. There is no
+	 * fundamental reason that couldn't be made to work, but it doesn't
+	 * currently because we use a temporary table. Better to check for it
+	 * explicitly than error out, for a better error message.
+	 */
+	str = run_simple_query("SELECT pg_is_in_recovery()");
+	if (strcmp(str, "f") != 0)
+	{
+		fprintf(stderr, "source server must not be in recovery mode\n");
+		exit(1);
+	}
+	pg_free(str);
+
+	/*
+	 * Also check that full_page_writes is enabled.  We can get torn pages if
+	 * a page is modified while we read it with pg_read_binary_file(), and we
+	 * rely on full page images to fix them.
+	 */
+	str = run_simple_query("SHOW full_page_writes");
+	if (strcmp(str, "on") != 0)
+	{
+		fprintf(stderr, "full_page_writes must be enabled in the source server\n");
+		exit(1);
+	}
+	pg_free(str);
+
+	/*
+	 * Although we don't do any "real" updates, we do work with a temporary
+	 * table. We don't care about synchronous commit for that. It doesn't
+	 * otherwise matter much, but if the server is using synchronous
+	 * replication, and replication isn't working for some reason, we don't
+	 * want to get stuck, waiting for it to start working again.
+	 */
+	res = PQexec(conn, "SET synchronous_commit = off");
+	if (PQresultStatus(res) != PGRES_COMMAND_OK)
+	{
+		fprintf(stderr, "could not set up connection context: %s",
+				PQresultErrorMessage(res));
+		exit(1);
+	}
+	PQclear(res);
 }
 
 /*
