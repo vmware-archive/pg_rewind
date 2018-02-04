@@ -510,7 +510,7 @@ libpqGetFile(const char *filename, size_t *filesize)
 }
 
 static void
-copy_file_range(const char *path, unsigned int begin, unsigned int end)
+rewind_copy_file_range(const char *path, unsigned int begin, unsigned int end)
 {
 	char linebuf[MAXPGPATH + 23];
 
@@ -588,7 +588,7 @@ libpq_executeFileMap(filemap_t *map)
 			case FILE_ACTION_COPY:
 				/* Truncate the old file out of the way, if any */
 				open_target_file(entry->path, true);
-				copy_file_range(entry->path, 0, entry->newsize);
+				rewind_copy_file_range(entry->path, 0, entry->newsize);
 				break;
 
 			case FILE_ACTION_TRUNCATE:
@@ -596,7 +596,7 @@ libpq_executeFileMap(filemap_t *map)
 				break;
 
 			case FILE_ACTION_COPY_TAIL:
-				copy_file_range(entry->path, entry->oldsize, entry->newsize);
+				rewind_copy_file_range(entry->path, entry->oldsize, entry->newsize);
 				break;
 
 			case FILE_ACTION_REMOVE:
@@ -650,7 +650,7 @@ execute_pagemap(datapagemap_t *pagemap, const char *path)
 	{
 		off_t offset = blkno * BLCKSZ;
 
-		copy_file_range(path, offset, offset + BLCKSZ);
+		rewind_copy_file_range(path, offset, offset + BLCKSZ);
 	}
 	free(iter);
 }
