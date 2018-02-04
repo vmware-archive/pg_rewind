@@ -237,7 +237,7 @@ write_file_range(char *buf, off_t begin, size_t size)
  * Copy a file from source to target, between 'begin' and 'end' offsets.
  */
 static void
-copy_file_range(const char *path, off_t begin, off_t end, bool trunc)
+rewind_copy_file_range(const char *path, off_t begin, off_t end, bool trunc)
 {
 	char		buf[BLCKSZ];
 	char		srcpath[MAXPGPATH];
@@ -344,7 +344,7 @@ copy_executeFileMap(filemap_t *map)
 				break;
 
 			case FILE_ACTION_COPY:
-				copy_file_range(entry->path, 0, entry->newsize, true);
+				rewind_copy_file_range(entry->path, 0, entry->newsize, true);
 				break;
 
 			case FILE_ACTION_TRUNCATE:
@@ -352,7 +352,7 @@ copy_executeFileMap(filemap_t *map)
 				break;
 
 			case FILE_ACTION_COPY_TAIL:
-				copy_file_range(entry->path, entry->oldsize, entry->newsize, false);
+				rewind_copy_file_range(entry->path, entry->oldsize, entry->newsize, false);
 				break;
 
 			case FILE_ACTION_CREATE:
@@ -528,7 +528,7 @@ execute_pagemap(datapagemap_t *pagemap, const char *path)
 	{
 		off_t offset = blkno * BLCKSZ;
 
-		copy_file_range(path, offset, offset + BLCKSZ, false);
+		rewind_copy_file_range(path, offset, offset + BLCKSZ, false);
 		/* Ok, this block has now been copied from new data dir to old */
 	}
 	free(iter);
