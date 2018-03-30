@@ -149,6 +149,16 @@ libpqConnect(const char *connstr)
 	if (verbose)
 		fprintf(stderr, "connected to remote server\n");
 
+	/* Secure connection by enforcing search_path */
+	res = PQexec(conn, "SELECT pg_catalog.set_config('search_path', '', false)");
+	if (PQresultStatus(res) != PGRES_TUPLES_OK)
+	{
+		fprintf(stderr, "could not clear search_path: %s",
+				PQresultErrorMessage(res));
+		exit(1);
+	}
+	PQclear(res);
+
 	/*
 	 * Check that the server is not in hot standby mode. There is no
 	 * fundamental reason that couldn't be made to work, but it doesn't
