@@ -13,12 +13,13 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <regex.h>
 
 #include "datapagemap.h"
 #include "filemap.h"
 #include "util.h"
 #include "pg_rewind.h"
+#include "catalog/catalog.h"
+#include "catalog/pg_tablespace.h"
 #include "storage/fd.h"
 
 filemap_t *filemap = NULL;
@@ -504,67 +505,79 @@ print_filemap(void)
 static bool
 isRelDataFile(const char *path)
 {
-	static bool	regexps_compiled = false;
-	static regex_t datasegment_regex;
-	int			rc;
+	RelFileNode rnode;
+	unsigned int segNo;
+	int			nmatch;
+	bool		matched;
 
-	/* Compile the regexp if not compiled yet. */
-	if (!regexps_compiled)
+	/*----
+	 * Relation data files can be in one of the following directories:
+	 *
+	 * global/
+	 *		shared relations
+	 *
+	 * base/<db oid>/
+	 *		regular relations, default tablespace
+	 *
+	 * pg_tblspc/<tblspc oid>/<tblspc version>/
+	 *		within a non-default tablespace (the name of the directory
+	 *		depends on version)
+	 *
+	 * And the relation data files themselves have a filename like:
+	 *
+	 * <oid>.<segment number>
+	 *
+	 *----
+	 */
+	rnode.spcNode = InvalidOid;
+	rnode.dbNode = InvalidOid;
+	rnode.relNode = InvalidOid;
+	segNo = 0;
+	matched = false;
+
+	nmatch = sscanf(path, "global/%u.%u", &rnode.relNode, &segNo);
+	if (nmatch == 1 || nmatch == 2)
 	{
-		/*
-		 * Relation data files can be in one of the following directories:
-		 *
-		 * global/
-		 *		shared relations
-		 *
-		 * base/<db oid>/
-		 *		regular relations, default tablespace
-		 *
-		 * pg_tblspc/<tblspc oid>/PG_9.4_201403261/
-		 *		within a non-default tablespace (the name of the directory
-		 *		depends on version)
-		 *
-		 * And the relation data files themselves have a filename like:
-		 *
-		 * <oid>.<segment number>
-		 *
-		 * This regular expression tries to capture all of above.
-		 */
-		const char *datasegment_regex_str =
-			"("
-			"global"
-			"|"
-			"base/[0-9]+"
-			"|"
-			"pg_tblspc/[0-9]+/[PG_0-9.0-9_0-9]+/[0-9]+"
-			")/"
-			"[0-9]+(\\.[0-9]+)?$";
-		rc = regcomp(&datasegment_regex, datasegment_regex_str, REG_NOSUB | REG_EXTENDED);
-		if (rc != 0)
+		rnode.spcNode = GLOBALTABLESPACE_OID;
+		rnode.dbNode = 0;
+		matched = true;
+	}
+	else
+	{
+		nmatch = sscanf(path, "base/%u/%u.%u",
+						&rnode.dbNode, &rnode.relNode, &segNo);
+		if (nmatch == 2 || nmatch == 3)
 		{
-			char errmsg[100];
-			regerror(rc, &datasegment_regex, errmsg, sizeof(errmsg));
-			fprintf(stderr, "could not compile regular expression: %s\n",
-					errmsg);
-			exit(1);
+			rnode.spcNode = DEFAULTTABLESPACE_OID;
+			matched = true;
 		}
-		regexps_compiled = true;
+		else
+		{
+			nmatch = sscanf(path, "pg_tblspc/%u/" TABLESPACE_VERSION_DIRECTORY "/%u/%u.%u",
+							&rnode.spcNode, &rnode.dbNode, &rnode.relNode,
+							&segNo);
+			if (nmatch == 3 || nmatch == 4)
+				matched = true;
+		}
 	}
 
-	rc = regexec(&datasegment_regex, path, 0, NULL, 0);
-	if (rc == 0)
+	/*
+	 * The sscanf tests above can match files that have extra characters at
+	 * the end. To eliminate such cases, cross-check that GetRelationPath
+	 * creates the exact same filename, when passed the RelFileNode information
+	 * we extracted from the filename.
+	 */
+	if (matched)
 	{
-		/* it's a data segment file */
-		return true;
+		char	   *check_path = datasegpath(rnode, MAIN_FORKNUM, segNo);
+
+		if (strcmp(check_path, path) != 0)
+			matched = false;
+
+		pfree(check_path);
 	}
-	else if (rc != REG_NOMATCH)
-	{
-		char errmsg[100];
-		regerror(rc, &datasegment_regex, errmsg, sizeof(errmsg));
-		fprintf(stderr, "could not execute regular expression: %s\n", errmsg);
-		exit(1);
-	}
-	return false;
+
+	return matched;
 }
 
 static int
