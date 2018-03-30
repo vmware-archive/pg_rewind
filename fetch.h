@@ -53,6 +53,7 @@ typedef void (*process_file_callback_t) (const char *path, file_type_t type, siz
 extern void traverse_datadir(const char *datadir, process_file_callback_t callback);
 
 extern void truncate_target_file(const char *path, off_t newsize);
+extern void remove_target_file(const char *path, bool missing_ok);
 extern void create_target(file_entry_t *t);
 extern void remove_target(file_entry_t *t);
 extern void check_samefile(int fd1, int fd2);
