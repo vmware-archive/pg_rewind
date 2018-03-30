@@ -30,7 +30,6 @@ static void recurse_dir(const char *datadir, const char *path,
 
 static void execute_pagemap(datapagemap_t *pagemap, const char *path);
 
-static void remove_target_file(const char *path);
 static void create_target_dir(const char *path);
 static void remove_target_dir(const char *path);
 static void create_target_symlink(const char *path, const char *link);
@@ -382,11 +381,11 @@ remove_target(file_entry_t *entry)
 			break;
 
 		case FILE_TYPE_REGULAR:
-			remove_target_symlink(entry->path);
+			remove_target_file(entry->path, false);
 			break;
 
 		case FILE_TYPE_SYMLINK:
-			remove_target_file(entry->path);
+			remove_target_symlink(entry->path);
 			break;
 	}
 }
@@ -414,8 +413,12 @@ create_target(file_entry_t *entry)
 	}
 }
 
-static void
-remove_target_file(const char *path)
+/*
+ * Remove a file from target data directory.  If missing_ok is true, it
+ * is fine for the target file to not exist.
+ */
+void
+remove_target_file(const char *path, bool missing_ok)
 {
 	char		dstpath[MAXPGPATH];
 
@@ -425,6 +428,9 @@ remove_target_file(const char *path)
 	snprintf(dstpath, sizeof(dstpath), "%s/%s", datadir_target, path);
 	if (unlink(dstpath) != 0)
 	{
+		if (errno == ENOENT && missing_ok)
+			return;
+
 		fprintf(stderr, "could not remove file \"%s\": %s\n",
 				dstpath, strerror(errno));
 		exit(1);
