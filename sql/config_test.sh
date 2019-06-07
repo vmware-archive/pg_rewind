@@ -71,3 +71,4 @@ PORT_STANDBY=`expr $PORT_MASTER + 1`
 
 MASTER_PSQL="psql -a --no-psqlrc -p $PORT_MASTER"
 STANDBY_PSQL="psql -a --no-psqlrc -p $PORT_STANDBY"
+STANDBY_APPLICATION_NAME="standby_rewind"

@@ -27,6 +27,36 @@
 # to run psql against the master and standby servers, to cause the servers
 # to diverge.
 
+# Helper function to wait for an instance to catch up based on a status
+# query. The status query should be written so as it returns true ('t')
+# when matching the catchup query provided by the caller.  Note that
+# this cannot output logs except when failing as this makes the results
+# differ and the regression tests fail.
+function poll_query_until
+{
+	node_port=$1
+	query=$2
+
+	MAX_ATTEMPTS=100
+	attempts=1
+	while [ $attempts -lt $MAX_ATTEMPTS ]; do
+		# We don't want -a/--echo-all here as it falsifies results.
+		status=$(psql --no-psqlrc -p $node_port -At -c "$query")
+		if [ "$status" = "t" ]; then
+			break
+		fi
+		sleep 1
+		let attempts=attempts+1
+	done
+
+	# Nothing more can be done, so make sure that the test fails with
+	# a proper diff.
+	if [ $attempts == 100 ]; then
+		echo "Maximum number of attempts reached, failing."
+		exit 1
+	fi
+}
+
 # Initialize master, data checksums are mandatory
 rm -rf $TEST_MASTER
 initdb -N -A trust --data-checksums -D $TEST_MASTER >>$log_path
@@ -71,7 +101,7 @@ pg_basebackup -D $TEST_STANDBY -p $PORT_MASTER -x >>$log_path 2>&1
 echo "port = $PORT_STANDBY" >> $TEST_STANDBY/postgresql.conf
 
 cat > $TEST_STANDBY/recovery.conf <<EOF
-primary_conninfo='port=$PORT_MASTER'
+primary_conninfo='port=$PORT_MASTER application_name=$STANDBY_APPLICATION_NAME'
 standby_mode=on
 recovery_target_timeline='latest'
 EOF
@@ -84,13 +114,17 @@ pg_ctl -w -D $TEST_STANDBY start >>$log_path 2>&1
 echo "Standby initialized and running."
 standby_following_master
 
-# sleep a bit to make sure the standby has caught up.
-sleep 1
+# Make sure that the standby has caught up to the latest point of the
+# primary before moving on.
+CATCHUP_QUERY="SELECT pg_catalog.pg_current_xlog_location() = flush_location FROM pg_catalog.pg_stat_replication WHERE application_name='$STANDBY_APPLICATION_NAME';"
+poll_query_until $PORT_MASTER "$CATCHUP_QUERY"
 
 # Now promote slave and insert some new data on master, this will put
 # the master out-of-sync with the standby.
 pg_ctl -w -D $TEST_STANDBY promote >>$log_path 2>&1
-sleep 1
+
+# Make sure that the standby has finished recovery before moving on.
+poll_query_until $PORT_STANDBY "SELECT NOT pg_catalog.pg_is_in_recovery()"
 
 #### Now run the test-specific parts to run after promotion
 echo "Standby promoted."
